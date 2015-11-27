@@ -1,6 +1,6 @@
 # WARNING: Very early stage!
 
-There's a playground over here: http://fanyare.tcardenas.me:6500
+There's a playground over here: http://fanyare.tcardenas.me:5600
 
 # sgo: a safe Go dialect
 
