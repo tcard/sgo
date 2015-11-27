@@ -160,17 +160,19 @@ func Foo(i int) (*Result, ?error) {
 	if i % 2 == 0 {
 		return &Result{i}, nil
 	}
-	// return nil, Err("hola") -- doesn't compile
-	// return nil, nil         -- doesn't compile
+	// return nil, Err("hola") // doesn't compile
+	// return nil, nil         // doesn't compile
 	return &Result{i}, Err("hola")
 }
 
 func main() {
 	a, b := Foo(123)
+	// _ = b.Error() // doesn't compile
 	if b == nil {
+		// _ = b.Error() // doesn't compile
 		println(b)
 	} else {
-		println("HEY", b)
+		println("HEY", b.Error())
 	}
 	println(a, b)
 }
@@ -178,7 +180,7 @@ func main() {
 </div>
 
 <div>
-<pre id="translated">
+<pre id="translated" style="height: 100%; max-height: 390px; overflow: scroll;">
 </pre>
 </div>
 

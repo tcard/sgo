@@ -100,6 +100,8 @@ func Comparable(T Type) bool {
 		return true
 	case *Array:
 		return Comparable(t.elem)
+	case *Optional:
+		return Comparable(t.elem)
 	}
 	return false
 }

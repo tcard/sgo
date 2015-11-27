@@ -322,6 +322,8 @@ func (c *converter) convertExpr(v ast.Expr) goast.Expr {
 		return c.convertBasicLit(v)
 	case *ast.BinaryExpr:
 		return c.convertBinaryExpr(v)
+	case *ast.SelectorExpr:
+		return c.convertSelectorExpr(v)
 	default:
 		panic(fmt.Sprintf("unhandled Expr %T", v))
 	}
@@ -351,6 +353,16 @@ func (c *converter) convertStarExpr(v *ast.StarExpr) *goast.StarExpr {
 	return &goast.StarExpr{
 		Star: gotoken.Pos(v.Star),
 		X:    c.convertExpr(v.X),
+	}
+}
+
+func (c *converter) convertSelectorExpr(v *ast.SelectorExpr) *goast.SelectorExpr {
+	if v == nil {
+		return nil
+	}
+	return &goast.SelectorExpr{
+		X:   c.convertExpr(v.X),
+		Sel: c.convertIdent(v.Sel),
 	}
 }
 
