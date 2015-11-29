@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 
 	"github.com/tcard/sgo/sgo/ast"
+	"github.com/tcard/sgo/sgo/importer"
 	"github.com/tcard/sgo/sgo/parser"
 	"github.com/tcard/sgo/sgo/scanner"
 	"github.com/tcard/sgo/sgo/token"
@@ -62,6 +63,7 @@ func Translate(path string, fset *token.FileSet, sgoFiles ...*ast.File) ([]*goas
 		Error: func(err error) {
 			errors = append(errors, err)
 		},
+		Importer: importer.Default(),
 	}
 	info := &types.Info{
 		Types:      map[ast.Expr]types.TypeAndValue{},
@@ -176,8 +178,10 @@ func (c *converter) convertSpec(v ast.Spec) goast.Spec {
 	switch v := v.(type) {
 	case *ast.TypeSpec:
 		return c.convertTypeSpec(v)
+	case *ast.ImportSpec:
+		return c.convertImportSpec(v)
 	default:
-		panic(fmt.Sprintf("unhandled spec %T", v))
+		panic(fmt.Sprintf("unhandled Spec %T", v))
 	}
 }
 
@@ -190,6 +194,19 @@ func (c *converter) convertTypeSpec(v *ast.TypeSpec) *goast.TypeSpec {
 		Name:    c.convertIdent(v.Name),
 		Type:    c.convertExpr(v.Type),
 		Comment: c.convertCommentGroup(v.Comment),
+	}
+}
+
+func (c *converter) convertImportSpec(v *ast.ImportSpec) *goast.ImportSpec {
+	if v == nil {
+		return nil
+	}
+	return &goast.ImportSpec{
+		Doc:     c.convertCommentGroup(v.Doc),
+		Name:    c.convertIdent(v.Name),
+		Path:    c.convertBasicLit(v.Path),
+		Comment: c.convertCommentGroup(v.Comment),
+		EndPos:  gotoken.Pos(v.Pos()),
 	}
 }
 

@@ -147,22 +147,19 @@ var indexTpl = template.Must(template.New("index").Parse(`
 <textarea id="input-code" style="width: 90%;" rows="30">
 package main
 
+import "errors"
+
 type Result struct {
 	a int
 }
-
-type Err string
-
-// Error returns the error string
-func (e Err) Error() string { return string(e) }
 
 func Foo(i int) (*Result, ?error) {
 	if i % 2 == 0 {
 		return &Result{i}, nil
 	}
-	// return nil, Err("hola") // doesn't compile
+	// return nil, errors.New("hola") // doesn't compile
 	// return nil, nil         // doesn't compile
-	return &Result{i}, Err("hola")
+	return &Result{i}, errors.New("hola")
 }
 
 func main() {

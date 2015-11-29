@@ -1,21 +1,29 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 
 	"github.com/tcard/sgo/sgo"
 )
 
 func main() {
-	f, err := ioutil.ReadFile(os.Args[1])
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	var r io.Reader
+	var fileName string
+	if len(os.Args) > 1 {
+		var err error
+		fileName = os.Args[1]
+		r, err = os.Open(os.Args[1])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	} else {
+		r = os.Stdin
+		fileName = "stdin.sgo"
 	}
-	err = sgo.TranslateFile(os.Stdout, bytes.NewReader(f), os.Args[1])
+	err := sgo.TranslateFile(os.Stdout, r, fileName)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

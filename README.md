@@ -43,7 +43,7 @@ _ = m["needle"]            // ... would cause a panic if used before initialized
 ## The billion dollar mistake
 
 > "It was the invention of the null reference in 1965. [...] This has led to innumerable errors, vulnerabilities, and system crashes, which have probably caused a billion dollars of pain and damage in the last forty years."
-> 
+>
 > C. A. R. Hoare, inventor of nil
 
 `nil`, in Go, is used to represent **the idea of "you expected something to be here, but there is nothing"** for certain types (pointers, slices, interfaces, maps, and functions). This is a very useful concept; not only it can be used by the  logic of your programs to express lack of something (e. g. a `http.Request` can have no body, in which case its `Body` field is `nil`), but also provides a meaningful way of initializing variables and fields of those types.
@@ -72,7 +72,7 @@ type TreeNode struct {
 }
 ```
 
-There are two kind of values you can assign to an optional: 
+There are two kind of values you can assign to an optional:
 
 * A value of its wrapped type.
 * `nil`
@@ -107,7 +107,8 @@ if err != nil {
 // anything with it.
 ```
 
-By returning early, you can also prove that an optional 
+By returning early, you can also prove that an optional is not `nil` pass that return.
+
 ```go
 func (m *Map) Find(key string) ?*Value  { ... }
 
@@ -192,7 +193,7 @@ func Divide(dividend, divisor int64) (quotient int64, remainder int64 | err erro
 		err = errors.New("div by zero")
 		return
 	}
-	quotient = dividend / divisor 
+	quotient = dividend / divisor
 	remainder = dividend % divisor
 	return
 }
