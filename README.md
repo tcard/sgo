@@ -147,7 +147,7 @@ if err != nil {
 SGo leverages optionals to also capture this pattern in a safer yet equally convenient manner.
 
 ```go
-func Get(url string) (*Response | err) { ... }
+func Get(url string) (*Response | error) { ... }
 
 response, err := http.Get("http://github.com/tcard/sgo")
 // You can't use response yet; it wouldn't compile.
