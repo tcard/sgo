@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	goast "go/ast"
+	goconstant "go/constant"
 	goimporter "go/importer"
 	goparser "go/parser"
 	gotoken "go/token"
@@ -19,6 +20,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/tcard/sgo/sgo/constant"
 	"github.com/tcard/sgo/sgo/token"
 	"github.com/tcard/sgo/sgo/types"
 )
@@ -61,6 +63,7 @@ func (imp *importer) Import(path string) (*types.Package, error) {
 	}
 	conv := &converser{gopkg: gopkg, anns: anns}
 	return conv.convert(), nil
+
 }
 
 func (imp *importer) importFromSrc(path string, gopath []string) (*gotypes.Package, map[string]annotation, error) {
@@ -116,22 +119,25 @@ func (c *converser) convertPackage(v *gotypes.Package) *types.Package {
 		return v.(*types.Package)
 	}
 
-	c.ret = types.NewPackage(v.Path(), v.Name())
-	c.converted[v] = c.ret
+	ret := types.NewPackage(v.Path(), v.Name())
+	if c.ret == nil {
+		c.ret = ret
+	}
+	c.converted[v] = ret
 
 	var imports []*types.Package
 	for _, imported := range v.Imports() {
 		imports = append(imports, c.convertPackage(imported))
 	}
-	c.ret.SetImports(imports)
+	ret.SetImports(imports)
 
-	c.convertScope(c.ret.Scope(), v.Scope())
+	c.convertScope(ret.Scope(), v.Scope())
 
 	for _, iface := range c.ifaces {
 		iface.Complete()
 	}
 
-	return c.ret
+	return ret
 }
 
 func (c *converser) convertScope(dst *types.Scope, src *gotypes.Scope) {
@@ -160,6 +166,10 @@ func (c *converser) convertObject(v gotypes.Object) types.Object {
 		ret = c.convertTypeName(v)
 	case *gotypes.Var:
 		ret = c.convertVar(v)
+	case *gotypes.Const:
+		ret = c.convertConst(v)
+	case *gotypes.PkgName:
+		ret = c.convertPkgName(v)
 	default:
 		panic(fmt.Sprintf("unhandled Object %T", v))
 	}
@@ -235,6 +245,41 @@ func (c *converser) convertVar(v *gotypes.Var) *types.Var {
 	return ret
 }
 
+func (c *converser) convertConst(v *gotypes.Const) *types.Const {
+	if v == nil {
+		return nil
+	}
+	if v, ok := c.converted[v]; ok {
+		return v.(*types.Const)
+	}
+	ret := types.NewConst(
+		token.Pos(v.Pos()),
+		c.ret,
+		v.Name(),
+		c.convertType(v.Type()),
+		c.convertConstantValue(v.Val()),
+	)
+	c.converted[v] = ret
+	return ret
+}
+
+func (c *converser) convertPkgName(v *gotypes.PkgName) *types.PkgName {
+	if v == nil {
+		return nil
+	}
+	if v, ok := c.converted[v]; ok {
+		return v.(*types.PkgName)
+	}
+	ret := types.NewPkgName(
+		token.Pos(v.Pos()),
+		c.ret,
+		v.Name(),
+		c.convertPackage(v.Imported()),
+	)
+	c.converted[v] = ret
+	return ret
+}
+
 func (c *converser) convertTuple(v *gotypes.Tuple, conv func(*gotypes.Var) *types.Var) *types.Tuple {
 	if v == nil {
 		return nil
@@ -299,6 +344,12 @@ func (c *converser) convertType(v gotypes.Type) types.Type {
 		ret = c.convertStruct(v)
 	case *gotypes.Interface:
 		ret = c.convertInterface(v)
+	case *gotypes.Slice:
+		ret = c.convertSlice(v)
+	case *gotypes.Array:
+		ret = c.convertArray(v)
+	case *gotypes.Signature:
+		ret = c.convertSignature(v)
 	default:
 		panic(fmt.Sprintf("unhandled Type %T", v))
 	}
@@ -352,8 +403,14 @@ func (c *converser) convertBasic(v *gotypes.Basic) *types.Basic {
 			break
 		}
 	}
+	switch v.Kind() {
+	case gotypes.Byte:
+		ret = types.ByteType
+	case gotypes.Rune:
+		ret = types.RuneType
+	}
 	if ret == nil {
-		panic(fmt.Sprintf("unknown basic type %T", v))
+		panic(fmt.Sprintf("unknown basic type %v", v))
 	}
 	c.converted[v] = ret
 	return ret
@@ -384,19 +441,62 @@ func (c *converser) convertInterface(v *gotypes.Interface) *types.Interface {
 	if v, ok := c.converted[v]; ok {
 		return v.(*types.Interface)
 	}
-	// TODO: If some method returns or takes this interface, this will
-	// infintely recurse. Probably will need to add some new methods to
-	// *types.Interface to first construct and then add items.
-	methods := make([]*types.Func, 0, v.NumExplicitMethods())
-	for i := 0; i < v.NumExplicitMethods(); i++ {
-		methods = append(methods, c.convertFunc(v.ExplicitMethod(i)))
-	}
-	embeddeds := make([]*types.Named, 0, v.NumEmbeddeds())
-	for i := 0; i < v.NumEmbeddeds(); i++ {
-		embeddeds = append(embeddeds, c.convertNamed(v.Embedded(i)))
-	}
-	ret := types.NewInterface(methods, embeddeds)
+	ret := types.NewInterface(nil, nil)
 	c.converted[v] = ret
+	for i := 0; i < v.NumExplicitMethods(); i++ {
+		ret.AddMethod(c.convertFunc(v.ExplicitMethod(i)))
+	}
+	for i := 0; i < v.NumEmbeddeds(); i++ {
+		ret.AddEmbedded(c.convertNamed(v.Embedded(i)))
+	}
 	c.ifaces = append(c.ifaces, ret)
+	return ret
+}
+
+func (c *converser) convertSlice(v *gotypes.Slice) *types.Slice {
+	if v == nil {
+		return nil
+	}
+	if v, ok := c.converted[v]; ok {
+		return v.(*types.Slice)
+	}
+	ret := types.NewSlice(c.convertType(v.Elem()))
+	c.converted[v] = ret
+	return ret
+}
+
+func (c *converser) convertArray(v *gotypes.Array) *types.Array {
+	if v == nil {
+		return nil
+	}
+	if v, ok := c.converted[v]; ok {
+		return v.(*types.Array)
+	}
+	ret := types.NewArray(c.convertType(v.Elem()), v.Len())
+	c.converted[v] = ret
+	return ret
+}
+
+func (c *converser) convertConstantValue(v goconstant.Value) constant.Value {
+	if v == nil {
+		return nil
+	}
+	if v, ok := c.converted[v]; ok {
+		return v.(constant.Value)
+	}
+	var ret constant.Value
+	switch v.Kind() {
+	case goconstant.Bool:
+		ret = constant.MakeBool(goconstant.BoolVal(v))
+	case goconstant.String:
+		ret = constant.MakeString(goconstant.StringVal(v))
+	case goconstant.Int:
+		ret = constant.MakeFromLiteral(v.String(), token.INT, 0)
+	case goconstant.Float:
+		ret = constant.MakeFromLiteral(v.String(), token.FLOAT, 0)
+	case goconstant.Complex:
+		ret = constant.MakeFromLiteral(v.String(), token.IMAG, 0)
+	}
+	c.converted[v] = ret
 	return ret
 }

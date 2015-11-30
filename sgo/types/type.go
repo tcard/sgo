@@ -254,6 +254,7 @@ func (s *Signature) Variadic() bool { return s.variadic }
 
 // An Interface represents an interface type.
 type Interface struct {
+	mset      objset
 	methods   []*Func  // ordered list of explicitly declared methods
 	embeddeds []*Named // ordered list of explicitly embedded types
 
@@ -264,25 +265,30 @@ type Interface struct {
 func NewInterface(methods []*Func, embeddeds []*Named) *Interface {
 	typ := new(Interface)
 
-	var mset objset
 	for _, m := range methods {
-		if mset.insert(m) != nil {
-			panic("multiple methods with the same name")
-		}
-		// set receiver
-		// TODO(gri) Ideally, we should use a named type here instead of
-		// typ, for less verbose printing of interface method signatures.
-		m.typ.(*Signature).recv = NewVar(m.pos, m.pkg, "", typ)
-	}
-	sort.Sort(byUniqueMethodName(methods))
-
-	if embeddeds == nil {
-		sort.Sort(byUniqueTypeName(embeddeds))
+		typ.AddMethod(m)
 	}
 
 	typ.methods = methods
 	typ.embeddeds = embeddeds
 	return typ
+}
+
+// AddMethod adds a method to an interface.
+func (t *Interface) AddMethod(m *Func) {
+	if t.mset.insert(m) != nil {
+		panic("multiple methods with the same name")
+	}
+	// set receiver
+	// TODO(gri) Ideally, we should use a named type here instead of
+	// t, for less verbose printing of interface method signatures.
+	m.typ.(*Signature).recv = NewVar(m.pos, m.pkg, "", t)
+	t.methods = append(t.methods, m)
+}
+
+// AddEmbedded adds an embedded interface to an interface.
+func (t *Interface) AddEmbedded(e *Named) {
+	t.embeddeds = append(t.embeddeds, e)
 }
 
 // NumExplicitMethods returns the number of explicitly declared methods of interface t.
@@ -317,6 +323,9 @@ func (t *Interface) Complete() *Interface {
 	if t.allMethods != nil {
 		return t
 	}
+
+	sort.Sort(byUniqueMethodName(t.methods))
+	sort.Sort(byUniqueTypeName(t.embeddeds))
 
 	var allMethods []*Func
 	if t.embeddeds == nil {

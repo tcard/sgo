@@ -7,9 +7,10 @@
 package types
 
 import (
+	"strings"
+
 	"github.com/tcard/sgo/sgo/constant"
 	"github.com/tcard/sgo/sgo/token"
-	"strings"
 )
 
 var (
@@ -55,6 +56,9 @@ var aliases = [...]*Basic{
 	{Byte, IsInteger | IsUnsigned, "byte"},
 	{Rune, IsInteger, "rune"},
 }
+
+var ByteType = aliases[0]
+var RuneType = aliases[1]
 
 func defPredeclaredTypes() {
 	for _, t := range Typ {

@@ -147,7 +147,10 @@ var indexTpl = template.Must(template.New("index").Parse(`
 <textarea id="input-code" style="width: 90%;" rows="30">
 package main
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 type Result struct {
 	a int
@@ -167,11 +170,11 @@ func main() {
 	// _ = b.Error() // doesn't compile
 	if b == nil {
 		// _ = b.Error() // doesn't compile
-		println(b)
+		fmt.Println(b)
 	} else {
-		println("HEY", b.Error())
+		fmt.Println("HEY", b.Error())
 	}
-	println(a, b)
+	fmt.Println(a, b)
 }
 </textarea>
 </div>
