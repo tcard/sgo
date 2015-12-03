@@ -156,25 +156,26 @@ type Result struct {
 	a int
 }
 
-func Foo(i int) (*Result, ?error) {
+func Foo(i int) (*Result \ error) {
 	if i % 2 == 0 {
-		return &Result{i}, nil
+		return &Result{i} \
 	}
 	// return nil, errors.New("hola") // doesn't compile
 	// return nil, nil         // doesn't compile
-	return &Result{i}, errors.New("hola")
+	return \ errors.New("hola")
 }
 
 func main() {
-	a, b := Foo(123)
-	// _ = b.Error() // doesn't compile
-	if b == nil {
-		// _ = b.Error() // doesn't compile
-		fmt.Println(b)
+	res \ err := Foo(123)
+	// _ = err.Error() // doesn't compile
+	if err == nil {
+		// _ = err.Error() // doesn't compile
+		fmt.Println("Result:", res) // will never panic; res will never be nil
 	} else {
-		fmt.Println("HEY", b.Error())
+		fmt.Println("Error:", err.Error())
+		// fmt.Println(res, err) // doesn't compile; a is entangled here
 	}
-	fmt.Println(a, b)
+	// fmt.Println(res, err) // doesn't compile; a is entangled here
 }
 </textarea>
 </div>

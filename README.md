@@ -20,8 +20,8 @@ if body := response.Body; body != nil {
 
 And this:
 ```go
-func Get(r *http.Request) (*Response | error) { ... }
-response | err := Get(r)
+func Get(r *http.Request) (*Response \ error) { ... }
+response \ err := Get(r)
 // body := response.Body doesn't compile; can't use response until we know
 // that err is nil.
 if err != nil {
@@ -148,7 +148,7 @@ if err != nil {
 SGo leverages optionals to also capture this pattern in a safer yet equally convenient manner.
 
 ```go
-func Get(url string) (*Response | error) { ... }
+func Get(url string) (*Response \ error) { ... }
 
 response, err := http.Get("http://github.com/tcard/sgo")
 // You can't use response yet; it wouldn't compile.
@@ -160,35 +160,35 @@ if err != nil {
 // nil here.
 ```
 
-A function signature may have at the end of its return list a vertical bar `|` followed by a type (or a named return with a type), this type being a pointer, map, interface, or function. (It will typically be the `error` interface.)
+A function signature may have at the end of its return list a backslash `\` followed by a type (or a named return with a type), this type being a pointer, map, interface, or function. (It will typically be the `error` interface.)
 
 When calling this function, the last returned value will be an optional. Only once proved, as defined above, that this optional is `nil` you will be able to use the rest of the returned values. (Hence the name "entangled", inspired by _quantum entanglement_, in which collapsing the wavefunction of a particle also causes a collapse in a separate particle that is entangled with it.)
 
 Let's see how to define a function that returns an entangled optional:
 
 ```go
-func NewRequest(method string, url string, body ?io.Reader) (*Request | error) { ... }
+func NewRequest(method string, url string, body ?io.Reader) (*Request \ error) { ... }
 
-func Get(url string) (*Response | error) {
-	req | err := NewRequest("GET", url, nil)
+func Get(url string) (*Response \ error) {
+	req \ err := NewRequest("GET", url, nil)
 	if err != nil {
-		return | err
+		return \ err
 	}
 
 	response, err = http.DefaultClient.Do(req)
 	if err != nil {
-		return | err
+		return \ err
 	}
 
-	return response |
-	// Just 'return response | err' would work here too.
+	return response \
+	// Just 'return response, err' would work here too.
 }
 ```
 
 You can entangle any number of variables with an optional, not just one.
 
 ```go
-func Divide(dividend, divisor int64) (quotient int64, remainder int64 | err error) {
+func Divide(dividend, divisor int64) (quotient int64, remainder int64 \ err error) {
 	if divisor == 0 {
 		err = errors.New("div by zero")
 		return
@@ -201,7 +201,7 @@ func Divide(dividend, divisor int64) (quotient int64, remainder int64 | err erro
 
 ## Representation in Go code
 
-Optionals introduce absolutely no runtime costs. You can translate from SGo to Go in your head just by removing the `?`s and the `|`s. When in SGo you assign `nil` to an optional variable, in Go you assign `nil` to a variable of the wrapped type. The only difference is that the resulting Go code is proven to be safe to execute (as in "won't crash due to nil") by the SGo compiler.
+Optionals introduce absolutely no runtime costs. You can translate from SGo to Go in your head just by removing the `?`s and the `\`s. When in SGo you assign `nil` to an optional variable, in Go you assign `nil` to a variable of the wrapped type. The only difference is that the resulting Go code is proven to be safe to execute (as in "won't crash due to nil") by the SGo compiler.
 
 This is why only pointers, maps, interfaces and functions can be wrapped in optionals. Those are the types which in Go can be `nil`. SGo keeps Go's feature that memory representation is totally obvious at all points, and doesn't introduce new, unfamiliar memory layouts such as tagged unions. Although it can be handy to have `?string`, or `?int`, that would defeat this purpose. You can either continue to use `""` and `0` or `-1` as nothingness for those types, as you usually do in Go, or wrap them in a pointer in the middle (`?*string`, `?*int`).
 

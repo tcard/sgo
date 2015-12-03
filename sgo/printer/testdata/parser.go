@@ -11,6 +11,7 @@ package parser
 
 import (
 	"fmt"
+
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/scanner"
 	"github.com/tcard/sgo/sgo/token"
@@ -413,15 +414,23 @@ func (p *parser) parseIdentList() (list []*ast.Ident) {
 // Common productions
 
 // If lhs is set, result list elements which are identifiers are not resolved.
-func (p *parser) parseExprList(lhs bool) (list []ast.Expr) {
+func (p *parser) parseExprList(lhs bool) *ast.ExprList {
 	if p.trace {
 		defer un(trace(p, "ExpressionList"))
 	}
 
-	list = append(list, p.parseExpr(lhs))
-	for p.tok == token.COMMA {
+	list := ast.NewExprList()
+	if p.tok == token.BACKSL {
+		list.EntangledPos == 0
+	}
+
+	list.List = append(list.List, p.parseExpr(lhs))
+	for p.tok == token.COMMA || (list.EntangledPos == -1 && p.tok == token.BACKSL) {
 		p.next()
-		list = append(list, p.parseExpr(lhs))
+		list.List = append(list.List, p.parseExpr(lhs))
+		if p.tok == token.BACKSL {
+			list.EntangledPos == len(list.List)
+		}
 	}
 
 	return
@@ -450,7 +459,7 @@ func (p *parser) parseLhsList() []ast.Expr {
 	return list
 }
 
-func (p *parser) parseRhsList() []ast.Expr {
+func (p *parser) parseRhsList() *ast.ExprList {
 	return p.parseExprList(false)
 }
 

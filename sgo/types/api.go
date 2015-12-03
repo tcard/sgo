@@ -27,6 +27,7 @@ package types // import "github.com/tcard/sgo/sgo/types"
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/constant"
 	"github.com/tcard/sgo/sgo/token"

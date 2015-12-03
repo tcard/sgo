@@ -138,12 +138,12 @@ func (p *parser) declare(decl, data interface{}, scope *ast.Scope, kind ast.ObjK
 	}
 }
 
-func (p *parser) shortVarDecl(decl *ast.AssignStmt, list []ast.Expr) {
+func (p *parser) shortVarDecl(decl *ast.AssignStmt, list *ast.ExprList) {
 	// Go spec: A short variable declaration may redeclare variables
 	// provided they were originally declared in the same block with
 	// the same type, and at least one of the non-blank variables is new.
 	n := 0 // number of new variables
-	for _, x := range list {
+	for _, x := range list.List {
 		if ident, isIdent := x.(*ast.Ident); isIdent {
 			assert(ident.Obj == nil, "identifier already declared or resolved")
 			obj := ast.NewObj(ast.Var, ident.Name)
@@ -162,7 +162,7 @@ func (p *parser) shortVarDecl(decl *ast.AssignStmt, list []ast.Expr) {
 		}
 	}
 	if n == 0 && p.mode&DeclarationErrors != 0 {
-		p.error(list[0].Pos(), "no new variables on left side of :=")
+		p.error(list.List[0].Pos(), "no new variables on left side of :=")
 	}
 }
 
@@ -420,11 +420,18 @@ func (p *parser) expectSemi() {
 	}
 }
 
-func (p *parser) atComma(context string, follow token.Token) bool {
+func (p *parser) atComma(context string, follow ...token.Token) bool {
 	if p.tok == token.COMMA {
 		return true
 	}
-	if p.tok != follow {
+	someFollow := false
+	for _, f := range follow {
+		if p.tok == f {
+			someFollow = true
+			break
+		}
+	}
+	if !someFollow {
 		msg := "missing ','"
 		if p.tok == token.SEMICOLON && p.lit == "\n" {
 			msg += " before newline"
@@ -556,21 +563,35 @@ func (p *parser) parseIdentList() (list []*ast.Ident) {
 // Common productions
 
 // If lhs is set, result list elements which are identifiers are not resolved.
-func (p *parser) parseExprList(lhs bool) (list []ast.Expr) {
+func (p *parser) parseExprList(lhs bool) *ast.ExprList {
 	if p.trace {
 		defer un(trace(p, "ExpressionList"))
 	}
 
-	list = append(list, p.checkExpr(p.parseExpr(lhs)))
-	for p.tok == token.COMMA {
+	list := ast.NewExprList()
+	if p.tok == token.BACKSL {
+		list.EntangledPos = 0
 		p.next()
-		list = append(list, p.checkExpr(p.parseExpr(lhs)))
 	}
 
-	return
+	list.List = append(list.List, p.parseExpr(lhs))
+	for p.tok == token.COMMA || (list.EntangledPos == -1 && p.tok == token.BACKSL) {
+		prevTok := p.tok
+		p.next()
+		if prevTok == token.BACKSL && (p.tok == token.SEMICOLON || p.tok == token.RBRACE) {
+			list.EntangledPos = len(list.List)
+			break
+		}
+		list.List = append(list.List, p.parseExpr(lhs))
+		if prevTok == token.BACKSL {
+			list.EntangledPos = len(list.List)
+		}
+	}
+
+	return list
 }
 
-func (p *parser) parseLhsList() []ast.Expr {
+func (p *parser) parseLhsList() *ast.ExprList {
 	old := p.inRhs
 	p.inRhs = false
 	list := p.parseExprList(true)
@@ -590,7 +611,7 @@ func (p *parser) parseLhsList() []ast.Expr {
 		//   to resolve the identifier in that case
 	default:
 		// identifiers must be declared elsewhere
-		for _, x := range list {
+		for _, x := range list.List {
 			p.resolve(x)
 		}
 	}
@@ -598,7 +619,7 @@ func (p *parser) parseLhsList() []ast.Expr {
 	return list
 }
 
-func (p *parser) parseRhsList() []ast.Expr {
+func (p *parser) parseRhsList() *ast.ExprList {
 	old := p.inRhs
 	p.inRhs = true
 	list := p.parseExprList(false)
@@ -668,9 +689,9 @@ func (p *parser) parseArrayType() ast.Expr {
 	return &ast.ArrayType{Lbrack: lbrack, Len: len, Elt: elt}
 }
 
-func (p *parser) makeIdentList(list []ast.Expr) []*ast.Ident {
-	idents := make([]*ast.Ident, len(list))
-	for i, x := range list {
+func (p *parser) makeIdentList(list *ast.ExprList) []*ast.Ident {
+	idents := make([]*ast.Ident, len(list.List))
+	for i, x := range list.List {
 		ident, isIdent := x.(*ast.Ident)
 		if !isIdent {
 			if _, isBad := x.(*ast.BadExpr); !isBad {
@@ -708,11 +729,11 @@ func (p *parser) parseFieldDecl(scope *ast.Scope) *ast.Field {
 		idents = p.makeIdentList(list)
 	} else {
 		// ["*"] TypeName (AnonymousField)
-		typ = list[0] // we always have at least one element
-		if n := len(list); n > 1 || !isTypeName(deref(typ)) {
+		typ = list.List[0] // we always have at least one element
+		if n := len(list.List); n > 1 || !isTypeName(deref(typ)) {
 			pos := typ.Pos()
 			p.errorExpected(pos, "anonymous field")
-			typ = &ast.BadExpr{From: pos, To: p.safePos(list[n-1].End())}
+			typ = &ast.BadExpr{From: pos, To: p.safePos(list.List[n-1].End())}
 		}
 	}
 
@@ -804,19 +825,23 @@ func (p *parser) parseVarType(isParam bool) ast.Expr {
 }
 
 // If any of the results are identifiers, they are not resolved.
-func (p *parser) parseVarList(isParam bool) (list []ast.Expr, typ ast.Expr) {
+func (p *parser) parseVarList(isParam bool) (list *ast.ExprList, typ ast.Expr) {
 	if p.trace {
 		defer un(trace(p, "VarList"))
 	}
 
+	list = ast.NewExprList()
 	// a list of identifiers looks like a list of type names
 	//
 	// parse/tryVarType accepts any type (including parenthesized
 	// ones) even though the syntax does not permit them here: we
 	// accept them all for more robust parsing and complain later
 	for typ := p.parseVarType(isParam); typ != nil; {
-		list = append(list, typ)
+		list.List = append(list.List, typ)
 		if p.tok != token.COMMA {
+			if list.EntangledPos == -1 && p.tok == token.BACKSL {
+				list.EntangledPos = len(list.List)
+			}
 			break
 		}
 		p.next()
@@ -847,7 +872,7 @@ func (p *parser) parseParameterList(scope *ast.Scope, ellipsisOk bool) (params [
 		// parameter or result variable is the function body.
 		p.declare(field, nil, scope, ast.Var, idents...)
 		p.resolve(typ)
-		if !p.atComma("parameter list", token.RPAREN) {
+		if !p.atComma("parameter list", token.RPAREN, token.BACKSL) {
 			return
 		}
 		p.next()
@@ -860,7 +885,7 @@ func (p *parser) parseParameterList(scope *ast.Scope, ellipsisOk bool) (params [
 			// parameter or result variable is the function body.
 			p.declare(field, nil, scope, ast.Var, idents...)
 			p.resolve(typ)
-			if !p.atComma("parameter list", token.RPAREN) {
+			if !p.atComma("parameter list", token.RPAREN, token.BACKSL) {
 				break
 			}
 			p.next()
@@ -869,8 +894,8 @@ func (p *parser) parseParameterList(scope *ast.Scope, ellipsisOk bool) (params [
 	}
 
 	// Type { "," Type } (anonymous parameters)
-	params = make([]*ast.Field, len(list))
-	for i, typ := range list {
+	params = make([]*ast.Field, len(list.List))
+	for i, typ := range list.List {
 		p.resolve(typ)
 		params[i] = &ast.Field{Type: typ}
 	}
@@ -888,8 +913,44 @@ func (p *parser) parseParameters(scope *ast.Scope, ellipsisOk bool) *ast.FieldLi
 		params = p.parseParameterList(scope, ellipsisOk)
 	}
 	rparen := p.expect(token.RPAREN)
-
 	return &ast.FieldList{Opening: lparen, List: params, Closing: rparen}
+}
+
+func (p *parser) parseReturnParams(scope *ast.Scope) *ast.FieldList {
+	if p.trace {
+		defer un(trace(p, "ReturnParams"))
+	}
+
+	var params []*ast.Field
+	lparen := p.expect(token.LPAREN)
+	if p.tok != token.RPAREN {
+		params = p.parseParameterList(scope, false)
+	}
+
+	entangled := false
+	if p.tok == token.BACKSL {
+		p.next()
+		list, typ := p.parseVarList(false)
+		if len(list.List) != 1 {
+			p.error(p.pos, "entangled return with more than one right-hand variable")
+		}
+		entangled = true
+		if typ != nil {
+			idents := p.makeIdentList(list)
+			field := &ast.Field{Names: idents, Type: typ}
+			params = append(params, field)
+			// Go spec: The scope of an identifier denoting a function
+			// parameter or result variable is the function body.
+			p.declare(field, nil, scope, ast.Var, idents...)
+			p.resolve(typ)
+		} else {
+			p.resolve(list.List[0])
+			params = append(params, &ast.Field{Type: list.List[0]})
+		}
+	}
+
+	rparen := p.expect(token.RPAREN)
+	return &ast.FieldList{Opening: lparen, List: params, Closing: rparen, LastEntangled: entangled}
 }
 
 func (p *parser) parseResult(scope *ast.Scope) *ast.FieldList {
@@ -898,7 +959,7 @@ func (p *parser) parseResult(scope *ast.Scope) *ast.FieldList {
 	}
 
 	if p.tok == token.LPAREN {
-		return p.parseParameters(scope, false)
+		return p.parseReturnParams(scope)
 	}
 
 	typ := p.tryType()
@@ -1686,12 +1747,12 @@ func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool) {
 		// assignment statement, possibly part of a range clause
 		pos, tok := p.pos, p.tok
 		p.next()
-		var y []ast.Expr
+		var y *ast.ExprList
 		isRange := false
 		if mode == rangeOk && p.tok == token.RANGE && (tok == token.DEFINE || tok == token.ASSIGN) {
 			pos := p.pos
 			p.next()
-			y = []ast.Expr{&ast.UnaryExpr{OpPos: pos, Op: token.RANGE, X: p.parseRhs()}}
+			y = ast.NewExprList(&ast.UnaryExpr{OpPos: pos, Op: token.RANGE, X: p.parseRhs()})
 			isRange = true
 		} else {
 			y = p.parseRhsList()
@@ -1703,8 +1764,8 @@ func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool) {
 		return as, isRange
 	}
 
-	if len(x) > 1 {
-		p.errorExpected(x[0].Pos(), "1 expression")
+	if len(x.List) > 1 {
+		p.errorExpected(x.List[0].Pos(), "1 expression")
 		// continue with first expression
 	}
 
@@ -1713,7 +1774,7 @@ func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool) {
 		// labeled statement
 		colon := p.pos
 		p.next()
-		if label, isIdent := x[0].(*ast.Ident); mode == labelOk && isIdent {
+		if label, isIdent := x.List[0].(*ast.Ident); mode == labelOk && isIdent {
 			// Go spec: The scope of a label is the body of the function
 			// in which it is declared and excludes the body of any nested
 			// function.
@@ -1728,24 +1789,24 @@ func (p *parser) parseSimpleStmt(mode int) (ast.Stmt, bool) {
 		// before the ':' that caused the problem. Thus, use the (latest) colon
 		// position for error reporting.
 		p.error(colon, "illegal label declaration")
-		return &ast.BadStmt{From: x[0].Pos(), To: colon + 1}, false
+		return &ast.BadStmt{From: x.List[0].Pos(), To: colon + 1}, false
 
 	case token.ARROW:
 		// send statement
 		arrow := p.pos
 		p.next()
 		y := p.parseRhs()
-		return &ast.SendStmt{Chan: x[0], Arrow: arrow, Value: y}, false
+		return &ast.SendStmt{Chan: x.List[0], Arrow: arrow, Value: y}, false
 
 	case token.INC, token.DEC:
 		// increment or decrement
-		s := &ast.IncDecStmt{X: x[0], TokPos: p.pos, Tok: p.tok}
+		s := &ast.IncDecStmt{X: x.List[0], TokPos: p.pos, Tok: p.tok}
 		p.next()
 		return s, false
 	}
 
 	// expression
-	return &ast.ExprStmt{X: x[0]}, false
+	return &ast.ExprStmt{X: x.List[0]}, false
 }
 
 func (p *parser) parseCallExpr(callType string) *ast.CallExpr {
@@ -1797,9 +1858,11 @@ func (p *parser) parseReturnStmt() *ast.ReturnStmt {
 
 	pos := p.pos
 	p.expect(token.RETURN)
-	var x []ast.Expr
+	var x *ast.ExprList
 	if p.tok != token.SEMICOLON && p.tok != token.RBRACE {
 		x = p.parseRhsList()
+	} else {
+		x = ast.NewExprList()
 	}
 	p.expectSemi()
 
@@ -1897,16 +1960,17 @@ func (p *parser) parseCaseClause(typeSwitch bool) *ast.CaseClause {
 	}
 
 	pos := p.pos
-	var list []ast.Expr
+	var list *ast.ExprList
 	if p.tok == token.CASE {
 		p.next()
 		if typeSwitch {
-			list = p.parseTypeList()
+			list = ast.NewExprList(p.parseTypeList()...)
 		} else {
 			list = p.parseRhsList()
 		}
 	} else {
 		p.expect(token.DEFAULT)
+		list = ast.NewExprList()
 	}
 
 	colon := p.expect(token.COLON)
@@ -1929,7 +1993,7 @@ func isTypeSwitchGuard(s ast.Stmt) bool {
 		return isTypeSwitchAssert(t.X)
 	case *ast.AssignStmt:
 		// v := x.(nil)
-		return len(t.Lhs) == 1 && t.Tok == token.DEFINE && len(t.Rhs) == 1 && isTypeSwitchAssert(t.Rhs[0])
+		return len(t.Lhs.List) == 1 && t.Tok == token.DEFINE && len(t.Rhs.List) == 1 && isTypeSwitchAssert(t.Rhs.List[0])
 	}
 	return false
 }
@@ -2005,38 +2069,38 @@ func (p *parser) parseCommClause() *ast.CommClause {
 		lhs := p.parseLhsList()
 		if p.tok == token.ARROW {
 			// SendStmt
-			if len(lhs) > 1 {
-				p.errorExpected(lhs[0].Pos(), "1 expression")
+			if len(lhs.List) > 1 {
+				p.errorExpected(lhs.List[0].Pos(), "1 expression")
 				// continue with first expression
 			}
 			arrow := p.pos
 			p.next()
 			rhs := p.parseRhs()
-			comm = &ast.SendStmt{Chan: lhs[0], Arrow: arrow, Value: rhs}
+			comm = &ast.SendStmt{Chan: lhs.List[0], Arrow: arrow, Value: rhs}
 		} else {
 			// RecvStmt
 			if tok := p.tok; tok == token.ASSIGN || tok == token.DEFINE {
 				// RecvStmt with assignment
-				if len(lhs) > 2 {
-					p.errorExpected(lhs[0].Pos(), "1 or 2 expressions")
+				if len(lhs.List) > 2 {
+					p.errorExpected(lhs.List[0].Pos(), "1 or 2 expressions")
 					// continue with first two expressions
-					lhs = lhs[0:2]
+					lhs.List = lhs.List[0:2]
 				}
 				pos := p.pos
 				p.next()
 				rhs := p.parseRhs()
-				as := &ast.AssignStmt{Lhs: lhs, TokPos: pos, Tok: tok, Rhs: []ast.Expr{rhs}}
+				as := &ast.AssignStmt{Lhs: lhs, TokPos: pos, Tok: tok, Rhs: &ast.ExprList{List: []ast.Expr{rhs}}}
 				if tok == token.DEFINE {
 					p.shortVarDecl(as, lhs)
 				}
 				comm = as
 			} else {
 				// lhs must be single receive operation
-				if len(lhs) > 1 {
-					p.errorExpected(lhs[0].Pos(), "1 expression")
+				if len(lhs.List) > 1 {
+					p.errorExpected(lhs.List[0].Pos(), "1 expression")
 					// continue with first expression
 				}
-				comm = &ast.ExprStmt{X: lhs[0]}
+				comm = &ast.ExprStmt{X: lhs.List[0]}
 			}
 		}
 	} else {
@@ -2087,7 +2151,7 @@ func (p *parser) parseForStmt() ast.Stmt {
 				// "for range x" (nil lhs in assignment)
 				pos := p.pos
 				p.next()
-				y := []ast.Expr{&ast.UnaryExpr{OpPos: pos, Op: token.RANGE, X: p.parseRhs()}}
+				y := ast.NewExprList(&ast.UnaryExpr{OpPos: pos, Op: token.RANGE, X: p.parseRhs()})
 				s2 = &ast.AssignStmt{Rhs: y}
 				isRange = true
 			} else {
@@ -2116,20 +2180,20 @@ func (p *parser) parseForStmt() ast.Stmt {
 		as := s2.(*ast.AssignStmt)
 		// check lhs
 		var key, value ast.Expr
-		switch len(as.Lhs) {
+		switch len(as.Lhs.List) {
 		case 0:
 			// nothing to do
 		case 1:
-			key = as.Lhs[0]
+			key = as.Lhs.List[0]
 		case 2:
-			key, value = as.Lhs[0], as.Lhs[1]
+			key, value = as.Lhs.List[0], as.Lhs.List[1]
 		default:
-			p.errorExpected(as.Lhs[len(as.Lhs)-1].Pos(), "at most 2 expressions")
+			p.errorExpected(as.Lhs.List[len(as.Lhs.List)-1].Pos(), "at most 2 expressions")
 			return &ast.BadStmt{From: pos, To: p.safePos(body.End())}
 		}
 		// parseSimpleStmt returned a right-hand side that
 		// is a single unary expression of the form "range x"
-		x := as.Rhs[0].(*ast.UnaryExpr).X
+		x := as.Rhs.List[0].(*ast.UnaryExpr).X
 		return &ast.RangeStmt{
 			For:    pos,
 			Key:    key,
@@ -2273,17 +2337,19 @@ func (p *parser) parseValueSpec(doc *ast.CommentGroup, keyword token.Token, iota
 	pos := p.pos
 	idents := p.parseIdentList()
 	typ := p.tryType()
-	var values []ast.Expr
+	var values *ast.ExprList
 	// always permit optional initialization for more tolerant parsing
 	if p.tok == token.ASSIGN {
 		p.next()
 		values = p.parseRhsList()
+	} else {
+		values = ast.NewExprList()
 	}
 	p.expectSemi() // call before accessing p.linecomment
 
 	switch keyword {
 	case token.VAR:
-		if typ == nil && values == nil {
+		if typ == nil && values.List == nil {
 			p.error(pos, "missing variable type or initialization")
 		}
 	case token.CONST:

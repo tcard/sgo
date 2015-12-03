@@ -5,6 +5,8 @@
 package types
 
 import (
+	"fmt"
+
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/constant"
 	"github.com/tcard/sgo/sgo/token"
@@ -140,7 +142,7 @@ func (check *Checker) varDecl(obj *Var, lhs []*Var, typ, init ast.Expr) {
 
 	// determine type, if any
 	if typ != nil {
-		obj.typ = check.typ(typ)
+		obj.setType(check.typ(typ))
 	}
 
 	// check initialization
@@ -150,6 +152,11 @@ func (check *Checker) varDecl(obj *Var, lhs []*Var, typ, init ast.Expr) {
 			obj.typ = Typ[Invalid]
 		}
 		return
+	} else {
+		obj.usable = true
+		if debugUsable {
+			fmt.Println("USABLE 4", obj.name, obj.usable)
+		}
 	}
 
 	if lhs == nil || len(lhs) == 1 {
@@ -173,7 +180,7 @@ func (check *Checker) varDecl(obj *Var, lhs []*Var, typ, init ast.Expr) {
 			panic("inconsistent lhs")
 		}
 	}
-	check.initVars(lhs, []ast.Expr{init}, token.NoPos)
+	check.initVars(lhs, &ast.ExprList{List: []ast.Expr{init}}, token.NoPos, false)
 }
 
 // underlying returns the underlying type of typ; possibly by following
@@ -326,7 +333,7 @@ func (check *Checker) declStmt(decl ast.Decl) {
 				case token.CONST:
 					// determine which init exprs to use
 					switch {
-					case s.Type != nil || len(s.Values) > 0:
+					case s.Type != nil || len(s.Values.List) > 0:
 						last = s
 					case last == nil:
 						last = new(ast.ValueSpec) // make sure last exists
@@ -339,8 +346,8 @@ func (check *Checker) declStmt(decl ast.Decl) {
 						lhs[i] = obj
 
 						var init ast.Expr
-						if i < len(last.Values) {
-							init = last.Values[i]
+						if i < len(last.Values.List) {
+							init = last.Values.List[i]
 						}
 
 						check.constDecl(obj, last.Type, init)
@@ -367,21 +374,21 @@ func (check *Checker) declStmt(decl ast.Decl) {
 					for i, obj := range lhs0 {
 						var lhs []*Var
 						var init ast.Expr
-						switch len(s.Values) {
+						switch len(s.Values.List) {
 						case len(s.Names):
 							// lhs and rhs match
-							init = s.Values[i]
+							init = s.Values.List[i]
 						case 1:
 							// rhs is expected to be a multi-valued expression
 							lhs = lhs0
-							init = s.Values[0]
+							init = s.Values.List[0]
 						default:
-							if i < len(s.Values) {
-								init = s.Values[i]
+							if i < len(s.Values.List) {
+								init = s.Values.List[i]
 							}
 						}
 						check.varDecl(obj, lhs, s.Type, init)
-						if len(s.Values) == 1 {
+						if len(s.Values.List) == 1 {
 							// If we have a single lhs variable we are done either way.
 							// If we have a single rhs expression, it must be a multi-
 							// valued expression, in which case handling the first lhs

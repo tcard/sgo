@@ -9,6 +9,7 @@ package ast
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/tcard/sgo/sgo/token"
 )
 
@@ -124,7 +125,7 @@ func (obj *Object) Pos() token.Pos {
 			return d.Label.Pos()
 		}
 	case *AssignStmt:
-		for _, x := range d.Lhs {
+		for _, x := range d.Lhs.List {
 			if ident, isIdent := x.(*Ident); isIdent && ident.Name == name {
 				return ident.Pos()
 			}

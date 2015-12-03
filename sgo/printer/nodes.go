@@ -10,12 +10,13 @@ package printer
 
 import (
 	"bytes"
-	"github.com/tcard/sgo/sgo/ast"
-	"github.com/tcard/sgo/sgo/token"
 	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/tcard/sgo/sgo/ast"
+	"github.com/tcard/sgo/sgo/token"
 )
 
 // Formatting issues:
@@ -111,7 +112,7 @@ func (p *printer) identList(list []*ast.Ident, indent bool) {
 	if !indent {
 		mode = noIndent
 	}
-	p.exprList(token.NoPos, xlist, 1, mode, token.NoPos)
+	p.exprList(token.NoPos, ast.NewExprList(xlist...), 1, mode, token.NoPos)
 }
 
 // Print a list of expressions. If the list spans multiple
@@ -121,25 +122,30 @@ func (p *printer) identList(list []*ast.Ident, indent bool) {
 // TODO(gri) Consider rewriting this to be independent of []ast.Expr
 //           so that we can use the algorithm for any kind of list
 //           (e.g., pass list via a channel over which to range).
-func (p *printer) exprList(prev0 token.Pos, list []ast.Expr, depth int, mode exprListMode, next0 token.Pos) {
-	if len(list) == 0 {
+func (p *printer) exprList(prev0 token.Pos, list *ast.ExprList, depth int, mode exprListMode, next0 token.Pos) {
+	if len(list.List) == 0 {
 		return
 	}
 
 	prev := p.posFor(prev0)
 	next := p.posFor(next0)
-	line := p.lineFor(list[0].Pos())
-	endLine := p.lineFor(list[len(list)-1].End())
+	line := p.lineFor(list.List[0].Pos())
+	endLine := p.lineFor(list.List[len(list.List)-1].End())
 
 	if prev.IsValid() && prev.Line == line && line == endLine {
 		// all list entries on a single line
-		for i, x := range list {
-			if i > 0 {
+		for i, x := range list.List {
+			if i > 0 && i != list.EntangledPos {
 				// use position of expression following the comma as
 				// comma position for correct comment placement
 				p.print(x.Pos(), token.COMMA, blank)
+			} else if i == list.EntangledPos {
+				p.print(x.Pos(), token.BACKSL, blank)
 			}
 			p.expr0(x, depth)
+		}
+		if list.EntangledPos == len(list.List) {
+			p.print(0, token.BACKSL, blank)
 		}
 		return
 	}
@@ -167,7 +173,7 @@ func (p *printer) exprList(prev0 token.Pos, list []ast.Expr, depth int, mode exp
 
 	// print all list elements
 	prevLine := prev.Line
-	for i, x := range list {
+	for i, x := range list.List {
 		line = p.lineFor(x.Pos())
 
 		// determine if the next linebreak, if any, needs to use formfeed:
@@ -235,7 +241,7 @@ func (p *printer) exprList(prev0 token.Pos, list []ast.Expr, depth int, mode exp
 			}
 		}
 
-		if len(list) > 1 && isPair && size > 0 && needsLinebreak {
+		if len(list.List) > 1 && isPair && size > 0 && needsLinebreak {
 			// we have a key:value expression that fits onto one line
 			// and it's not on the same line as the prior expression:
 			// use a column for the key such that consecutive entries
@@ -812,13 +818,13 @@ func (p *printer) expr1(expr ast.Expr, prec1, depth int) {
 		}
 		p.print(x.Lparen, token.LPAREN)
 		if x.Ellipsis.IsValid() {
-			p.exprList(x.Lparen, x.Args, depth, 0, x.Ellipsis)
+			p.exprList(x.Lparen, ast.NewExprList(x.Args...), depth, 0, x.Ellipsis)
 			p.print(x.Ellipsis, token.ELLIPSIS)
 			if x.Rparen.IsValid() && p.lineFor(x.Ellipsis) < p.lineFor(x.Rparen) {
 				p.print(token.COMMA, formfeed)
 			}
 		} else {
-			p.exprList(x.Lparen, x.Args, depth, commaTerm, x.Rparen)
+			p.exprList(x.Lparen, ast.NewExprList(x.Args...), depth, commaTerm, x.Rparen)
 		}
 		p.print(x.Rparen, token.RPAREN)
 
@@ -828,7 +834,7 @@ func (p *printer) expr1(expr ast.Expr, prec1, depth int) {
 			p.expr1(x.Type, token.HighestPrec, depth)
 		}
 		p.print(x.Lbrace, token.LBRACE)
-		p.exprList(x.Lbrace, x.Elts, 1, commaTerm, x.Rbrace)
+		p.exprList(x.Lbrace, ast.NewExprList(x.Elts...), 1, commaTerm, x.Rbrace)
 		// do not insert extra line break following a /*-style comment
 		// before the closing '}' as it might break the code if there
 		// is no trailing ','
@@ -1110,7 +1116,7 @@ func (p *printer) stmt(stmt ast.Stmt, nextIsRBrace bool) {
 
 	case *ast.AssignStmt:
 		var depth = 1
-		if len(s.Lhs) > 1 && len(s.Rhs) > 1 {
+		if len(s.Lhs.List) > 1 && len(s.Rhs.List) > 1 {
 			depth++
 		}
 		p.exprList(s.Pos(), s.Lhs, depth, 0, s.TokPos)
@@ -1134,7 +1140,7 @@ func (p *printer) stmt(stmt ast.Stmt, nextIsRBrace bool) {
 			// always indent, but this would cause significant
 			// reformatting of the code base and not necessarily
 			// lead to more nicely formatted code in general.
-			if p.indentList(s.Results) {
+			if p.indentList(s.Results.List) {
 				p.print(indent)
 				p.exprList(s.Pos(), s.Results, 1, noIndent, token.NoPos)
 				p.print(unindent)

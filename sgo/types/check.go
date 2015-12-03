@@ -14,8 +14,9 @@ import (
 
 // debugging/development support
 const (
-	debug = false // leave on during development
-	trace = false // turn on for detailed type resolution traces
+	debug       = false // leave on during development
+	trace       = false // turn on for detailed type resolution traces
+	debugUsable = false
 )
 
 // If Strict is set, the type-checker enforces additional

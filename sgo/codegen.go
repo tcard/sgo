@@ -24,7 +24,9 @@ func TranslateFile(w io.Writer, r io.Reader, filename string) error {
 
 	fset := &token.FileSet{}
 	fset.AddFile(filename, 0, len(src))
-	file, err := parser.ParseFile(fset, filename, src, parser.ParseComments)
+	// TODO: parser.ParseComments, but tracking new positions. It breaks bad
+	// with newly generated code.
+	file, err := parser.ParseFile(fset, filename, src, 0)
 	if err != nil {
 		return err
 	}
@@ -88,12 +90,13 @@ func Translate(path string, fset *token.FileSet, sgoFiles ...*ast.File) ([]*goas
 }
 
 func convertAST(info *types.Info, sgoAST *ast.File) *goast.File {
-	c := converter{info}
+	c := converter{Info: info}
 	return c.convertFile(sgoAST)
 }
 
 type converter struct {
 	*types.Info
+	lastFunc *types.Signature
 }
 
 func (c *converter) convertFile(v *ast.File) *goast.File {
@@ -180,6 +183,8 @@ func (c *converter) convertSpec(v ast.Spec) goast.Spec {
 		return c.convertTypeSpec(v)
 	case *ast.ImportSpec:
 		return c.convertImportSpec(v)
+	case *ast.ValueSpec:
+		return c.convertValueSpec(v)
 	default:
 		panic(fmt.Sprintf("unhandled Spec %T", v))
 	}
@@ -210,10 +215,39 @@ func (c *converter) convertImportSpec(v *ast.ImportSpec) *goast.ImportSpec {
 	}
 }
 
+func (c *converter) convertValueSpec(v *ast.ValueSpec) *goast.ValueSpec {
+	if v == nil {
+		return nil
+	}
+	var names []*goast.Ident
+	for _, name := range v.Names {
+		names = append(names, c.convertIdent(name))
+	}
+	return &goast.ValueSpec{
+		Doc:     c.convertCommentGroup(v.Doc),
+		Names:   names,
+		Type:    c.convertExpr(v.Type),
+		Values:  c.convertExprList(v.Values),
+		Comment: c.convertCommentGroup(v.Comment),
+	}
+}
+
+func (c *converter) convertExprList(v *ast.ExprList) []goast.Expr {
+	if v == nil {
+		return nil
+	}
+	var exprs []goast.Expr
+	for _, expr := range v.List {
+		exprs = append(exprs, c.convertExpr(expr))
+	}
+	return exprs
+}
+
 func (c *converter) convertFuncDecl(v *ast.FuncDecl) *goast.FuncDecl {
 	if v == nil {
 		return nil
 	}
+	c.lastFunc = c.Info.ObjectOf(v.Name).Type().(*types.Signature)
 	return &goast.FuncDecl{
 		Doc:  c.convertCommentGroup(v.Doc),
 		Recv: c.convertFieldList(v.Recv),
@@ -249,6 +283,8 @@ func (c *converter) convertStmt(v ast.Stmt) goast.Stmt {
 		return c.convertExprStmt(v)
 	case *ast.BlockStmt:
 		return c.convertBlockStmt(v)
+	case *ast.DeclStmt:
+		return c.convertDeclStmt(v)
 	default:
 		panic(fmt.Sprintf("unhandled Stmt %T", v))
 	}
@@ -259,8 +295,43 @@ func (c *converter) convertReturnStmt(v *ast.ReturnStmt) *goast.ReturnStmt {
 		return nil
 	}
 	var results []goast.Expr
-	for _, v := range v.Results {
+	if v.Results.EntangledPos == 0 {
+		// return | err
+		for i := 0; i < c.lastFunc.Results().Len()-1; i++ {
+			typ := c.lastFunc.Results().At(i).Type()
+			var e goast.Expr
+			switch underlying := typ.Underlying().(type) {
+			case *types.Pointer, *types.Map, *types.Slice, *types.Signature, *types.Interface, *types.Optional:
+				e = goast.NewIdent("nil")
+			case *types.Struct:
+				panic("TODO")
+			case *types.Basic:
+				info := underlying.Info()
+				switch {
+				case info&types.IsBoolean != 0:
+					e = goast.NewIdent("false")
+				case info&types.IsInteger != 0:
+					e = &goast.BasicLit{Kind: gotoken.INT, Value: "0"}
+				case info&types.IsFloat != 0:
+					e = &goast.BasicLit{Kind: gotoken.FLOAT, Value: "0.0"}
+				case info&types.IsComplex != 0:
+					e = &goast.BasicLit{Kind: gotoken.FLOAT, Value: "0.0"}
+				case info&types.IsString != 0:
+					e = &goast.BasicLit{Kind: gotoken.STRING, Value: `""`}
+				default:
+					e = goast.NewIdent("nil")
+				}
+			default:
+				panic(fmt.Sprintf("unhandled Type %v", typ))
+			}
+			results = append(results, e)
+		}
+	}
+	for _, v := range v.Results.List {
 		results = append(results, c.convertExpr(v))
+	}
+	if v.Results.EntangledPos > 0 {
+		results = append(results, goast.NewIdent("nil"))
 	}
 	return &goast.ReturnStmt{
 		Return:  gotoken.Pos(v.Return),
@@ -273,11 +344,11 @@ func (c *converter) convertAssignStmt(v *ast.AssignStmt) *goast.AssignStmt {
 		return nil
 	}
 	var lhs []goast.Expr
-	for _, v := range v.Lhs {
+	for _, v := range v.Lhs.List {
 		lhs = append(lhs, c.convertExpr(v))
 	}
 	var rhs []goast.Expr
-	for _, v := range v.Rhs {
+	for _, v := range v.Rhs.List {
 		rhs = append(rhs, c.convertExpr(v))
 	}
 	return &goast.AssignStmt{
@@ -285,6 +356,15 @@ func (c *converter) convertAssignStmt(v *ast.AssignStmt) *goast.AssignStmt {
 		TokPos: gotoken.Pos(v.TokPos),
 		Tok:    c.convertToken(v.Tok),
 		Rhs:    rhs,
+	}
+}
+
+func (c *converter) convertDeclStmt(v *ast.DeclStmt) *goast.DeclStmt {
+	if v == nil {
+		return nil
+	}
+	return &goast.DeclStmt{
+		Decl: c.convertDecl(v.Decl),
 	}
 }
 
@@ -341,6 +421,10 @@ func (c *converter) convertExpr(v ast.Expr) goast.Expr {
 		return c.convertBinaryExpr(v)
 	case *ast.SelectorExpr:
 		return c.convertSelectorExpr(v)
+	case *ast.FuncType:
+		return c.convertFuncType(v)
+	case *ast.FuncLit:
+		return c.convertFuncLit(v)
 	default:
 		panic(fmt.Sprintf("unhandled Expr %T", v))
 	}
@@ -499,6 +583,16 @@ func (c *converter) convertIdent(v *ast.Ident) *goast.Ident {
 	return &goast.Ident{
 		NamePos: gotoken.Pos(v.NamePos),
 		Name:    v.Name,
+	}
+}
+
+func (c *converter) convertFuncLit(v *ast.FuncLit) *goast.FuncLit {
+	if v == nil {
+		return nil
+	}
+	return &goast.FuncLit{
+		Type: c.convertFuncType(v.Type),
+		Body: c.convertBlockStmt(v.Body),
 	}
 }
 

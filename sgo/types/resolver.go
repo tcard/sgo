@@ -6,13 +6,14 @@ package types
 
 import (
 	"fmt"
-	"github.com/tcard/sgo/sgo/ast"
-	"github.com/tcard/sgo/sgo/constant"
-	"github.com/tcard/sgo/sgo/token"
 	pathLib "path"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/tcard/sgo/sgo/ast"
+	"github.com/tcard/sgo/sgo/constant"
+	"github.com/tcard/sgo/sgo/token"
 )
 
 // A declInfo describes a package-level const, type, var, or func declaration.
@@ -49,9 +50,9 @@ func (d *declInfo) addDep(obj Object) {
 // var decls, init is nil (the init exprs are in s in this case).
 func (check *Checker) arityMatch(s, init *ast.ValueSpec) {
 	l := len(s.Names)
-	r := len(s.Values)
+	r := len(s.Values.List)
 	if init != nil {
-		r = len(init.Values)
+		r = len(init.Values.List)
 	}
 
 	switch {
@@ -61,9 +62,9 @@ func (check *Checker) arityMatch(s, init *ast.ValueSpec) {
 			check.errorf(s.Pos(), "missing type or init expr")
 		}
 	case l < r:
-		if l < len(s.Values) {
+		if l < len(s.Values.List) {
 			// init exprs from s
-			n := s.Values[l]
+			n := s.Values.List[l]
 			check.errorf(n.Pos(), "extra init expr %s", n)
 			// TODO(gri) avoid declared but not used error here
 		} else {
@@ -248,7 +249,7 @@ func (check *Checker) collectObjects() {
 						case token.CONST:
 							// determine which initialization expressions to use
 							switch {
-							case s.Type != nil || len(s.Values) > 0:
+							case s.Type != nil || len(s.Values.List) > 0:
 								last = s
 							case last == nil:
 								last = new(ast.ValueSpec) // make sure last exists
@@ -259,8 +260,8 @@ func (check *Checker) collectObjects() {
 								obj := NewConst(name.Pos(), pkg, name.Name, nil, constant.MakeInt64(int64(iota)))
 
 								var init ast.Expr
-								if i < len(last.Values) {
-									init = last.Values[i]
+								if i < len(last.Values.List) {
+									init = last.Values.List[i]
 								}
 
 								d := &declInfo{file: fileScope, typ: last.Type, init: init}
@@ -276,11 +277,11 @@ func (check *Checker) collectObjects() {
 							// so that each lhs variable depends on the same
 							// rhs initializer (n:1 var declaration).
 							var d1 *declInfo
-							if len(s.Values) == 1 {
+							if len(s.Values.List) == 1 {
 								// The lhs elements are only set up after the for loop below,
 								// but that's ok because declareVar only collects the declInfo
 								// for a later phase.
-								d1 = &declInfo{file: fileScope, lhs: lhs, typ: s.Type, init: s.Values[0]}
+								d1 = &declInfo{file: fileScope, lhs: lhs, typ: s.Type, init: s.Values.List[0]}
 							}
 
 							// declare all variables
@@ -292,8 +293,8 @@ func (check *Checker) collectObjects() {
 								if d == nil {
 									// individual assignments
 									var init ast.Expr
-									if i < len(s.Values) {
-										init = s.Values[i]
+									if i < len(s.Values.List) {
+										init = s.Values.List[i]
 									}
 									d = &declInfo{file: fileScope, typ: s.Type, init: init}
 								}

@@ -32,6 +32,11 @@ func (check *Checker) ident(x *operand, e *ast.Ident, def *Named, path []*TypeNa
 		}
 		return
 	}
+
+	if v, ok := obj.(*Var); ok && !v.usable {
+		check.errorf(e.Pos(), "possibly uninitialized variable: %s", e.Name)
+	}
+
 	check.recordUse(e, obj)
 
 	check.objDecl(obj, def, path)
@@ -146,9 +151,9 @@ func (check *Checker) funcType(sig *Signature, recvPar *ast.FieldList, ftyp *ast
 	scope := NewScope(check.scope, token.NoPos, token.NoPos, "function")
 	check.recordScope(ftyp, scope)
 
-	recvList, _ := check.collectParams(scope, recvPar, false)
-	params, variadic := check.collectParams(scope, ftyp.Params, true)
-	results, _ := check.collectParams(scope, ftyp.Results, false)
+	recvList, _, _ := check.collectParams(scope, recvPar, false)
+	params, _, variadic := check.collectParams(scope, ftyp.Params, true)
+	results, entangled, _ := check.collectParams(scope, ftyp.Results, false)
 
 	if recvPar != nil {
 		// recv parameter list present (may be empty)
@@ -201,7 +206,11 @@ func (check *Checker) funcType(sig *Signature, recvPar *ast.FieldList, ftyp *ast
 
 	sig.scope = scope
 	sig.params = NewTuple(params...)
-	sig.results = NewTuple(results...)
+	if entangled {
+		sig.results = NewTupleEntangled(results...)
+	} else {
+		sig.results = NewTuple(results...)
+	}
 	sig.variadic = variadic
 }
 
@@ -392,7 +401,7 @@ func (check *Checker) arrayLength(e ast.Expr) int64 {
 	return n
 }
 
-func (check *Checker) collectParams(scope *Scope, list *ast.FieldList, variadicOk bool) (params []*Var, variadic bool) {
+func (check *Checker) collectParams(scope *Scope, list *ast.FieldList, variadicOk bool) (params []*Var, lastEntangled bool, variadic bool) {
 	if list == nil {
 		return
 	}
@@ -410,6 +419,9 @@ func (check *Checker) collectParams(scope *Scope, list *ast.FieldList, variadicO
 			}
 		}
 		typ := check.typ(ftype)
+		if list.LastEntangled && i == len(list.List)-1 {
+			typ = NewOptional(typ)
+		}
 		// The parser ensures that f.Tag is nil and we don't
 		// care if a constructed AST contains a non-nil tag.
 		if len(field.Names) > 0 {
@@ -421,6 +433,9 @@ func (check *Checker) collectParams(scope *Scope, list *ast.FieldList, variadicO
 				}
 				par := NewParam(name.Pos(), check.pkg, name.Name, typ)
 				check.declare(scope, name, par, scope.pos)
+				if list.LastEntangled && i == len(list.List)-1 {
+					lastEntangled = true
+				}
 				params = append(params, par)
 			}
 			named = true
@@ -428,6 +443,9 @@ func (check *Checker) collectParams(scope *Scope, list *ast.FieldList, variadicO
 			// anonymous parameter
 			par := NewParam(ftype.Pos(), check.pkg, "", typ)
 			check.recordImplicit(field, par)
+			if list.LastEntangled && i == len(list.List)-1 {
+				lastEntangled = true
+			}
 			params = append(params, par)
 			anonymous = true
 		}

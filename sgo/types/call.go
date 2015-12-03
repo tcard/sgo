@@ -165,9 +165,6 @@ func unpack(get getter, n int, allowCommaOk bool) (getter, int, bool) {
 
 		// single value
 		return func(x *operand, i int) {
-			if i != 0 {
-				unreachable()
-			}
 			*x = x0
 		}, 1, false
 	}

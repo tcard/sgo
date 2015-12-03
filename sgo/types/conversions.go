@@ -137,6 +137,16 @@ func isPointer(typ Type) bool {
 	return ok
 }
 
+func isMap(typ Type) bool {
+	_, ok := typ.Underlying().(*Map)
+	return ok
+}
+
+func isSignature(typ Type) bool {
+	_, ok := typ.Underlying().(*Signature)
+	return ok
+}
+
 func isBytesOrRunes(typ Type) bool {
 	if s, ok := typ.(*Slice); ok {
 		t, ok := s.elem.Underlying().(*Basic)

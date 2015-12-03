@@ -44,6 +44,16 @@ type Expr interface {
 	exprNode()
 }
 
+// A ExprList represents a list of Exprs.
+type ExprList struct {
+	List         []Expr // expr list; or nil
+	EntangledPos int    // before which item in list there is a '|'
+}
+
+func NewExprList(list ...Expr) *ExprList {
+	return &ExprList{List: list, EntangledPos: -1}
+}
+
 // All statement nodes implement the Stmt interface.
 type Stmt interface {
 	Node
@@ -179,9 +189,10 @@ func (f *Field) End() token.Pos {
 
 // A FieldList represents a list of Fields, enclosed by parentheses or braces.
 type FieldList struct {
-	Opening token.Pos // position of opening parenthesis/brace, if any
-	List    []*Field  // field list; or nil
-	Closing token.Pos // position of closing parenthesis/brace, if any
+	Opening       token.Pos // position of opening parenthesis/brace, if any
+	List          []*Field  // field list; or nil
+	LastEntangled bool      // is the last field in List entangled to the rest?
+	Closing       token.Pos // position of closing parenthesis/brace, if any
 }
 
 func (f *FieldList) Pos() token.Pos {
@@ -611,10 +622,10 @@ type (
 	// a short variable declaration.
 	//
 	AssignStmt struct {
-		Lhs    []Expr
+		Lhs    *ExprList
 		TokPos token.Pos   // position of Tok
 		Tok    token.Token // assignment token, DEFINE
-		Rhs    []Expr
+		Rhs    *ExprList
 	}
 
 	// A GoStmt node represents a go statement.
@@ -632,7 +643,7 @@ type (
 	// A ReturnStmt node represents a return statement.
 	ReturnStmt struct {
 		Return  token.Pos // position of "return" keyword
-		Results []Expr    // result expressions; or nil
+		Results *ExprList // result expressions; or nil
 	}
 
 	// A BranchStmt node represents a break, continue, goto,
@@ -663,7 +674,7 @@ type (
 	// A CaseClause represents a case of an expression or type switch statement.
 	CaseClause struct {
 		Case  token.Pos // position of "case" or "default" keyword
-		List  []Expr    // list of expressions or types; nil means default case
+		List  *ExprList // list of expressions or types; nil means default case
 		Colon token.Pos // position of ":"
 		Body  []Stmt    // statement list; or nil
 	}
@@ -727,7 +738,7 @@ func (s *LabeledStmt) Pos() token.Pos    { return s.Label.Pos() }
 func (s *ExprStmt) Pos() token.Pos       { return s.X.Pos() }
 func (s *SendStmt) Pos() token.Pos       { return s.Chan.Pos() }
 func (s *IncDecStmt) Pos() token.Pos     { return s.X.Pos() }
-func (s *AssignStmt) Pos() token.Pos     { return s.Lhs[0].Pos() }
+func (s *AssignStmt) Pos() token.Pos     { return s.Lhs.List[0].Pos() }
 func (s *GoStmt) Pos() token.Pos         { return s.Go }
 func (s *DeferStmt) Pos() token.Pos      { return s.Defer }
 func (s *ReturnStmt) Pos() token.Pos     { return s.Return }
@@ -756,12 +767,12 @@ func (s *SendStmt) End() token.Pos    { return s.Value.End() }
 func (s *IncDecStmt) End() token.Pos {
 	return s.TokPos + 2 /* len("++") */
 }
-func (s *AssignStmt) End() token.Pos { return s.Rhs[len(s.Rhs)-1].End() }
+func (s *AssignStmt) End() token.Pos { return s.Rhs.List[len(s.Rhs.List)-1].End() }
 func (s *GoStmt) End() token.Pos     { return s.Call.End() }
 func (s *DeferStmt) End() token.Pos  { return s.Call.End() }
 func (s *ReturnStmt) End() token.Pos {
-	if n := len(s.Results); n > 0 {
-		return s.Results[n-1].End()
+	if n := len(s.Results.List); n > 0 {
+		return s.Results.List[n-1].End()
 	}
 	return s.Return + 6 // len("return")
 }
@@ -850,7 +861,7 @@ type (
 		Doc     *CommentGroup // associated documentation; or nil
 		Names   []*Ident      // value names (len(Names) > 0)
 		Type    Expr          // value type; or nil
-		Values  []Expr        // initial values; or nil
+		Values  *ExprList     // initial values; or nil
 		Comment *CommentGroup // line comments; or nil
 	}
 
@@ -882,8 +893,8 @@ func (s *ImportSpec) End() token.Pos {
 }
 
 func (s *ValueSpec) End() token.Pos {
-	if n := len(s.Values); n > 0 {
-		return s.Values[n-1].End()
+	if n := len(s.Values.List); n > 0 {
+		return s.Values.List[n-1].End()
 	}
 	if s.Type != nil {
 		return s.Type.End()

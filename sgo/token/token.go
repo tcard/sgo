@@ -44,7 +44,6 @@ const (
 	SHL     // <<
 	SHR     // >>
 	AND_NOT // &^
-	QUEST   // ?
 
 	ADD_ASSIGN // +=
 	SUB_ASSIGN // -=
@@ -121,6 +120,10 @@ const (
 	SWITCH
 	TYPE
 	VAR
+
+	QUEST  // ?
+	BACKSL // \
+
 	keyword_end
 )
 
@@ -149,7 +152,6 @@ var tokens = [...]string{
 	SHL:     "<<",
 	SHR:     ">>",
 	AND_NOT: "&^",
-	QUEST:   "?",
 
 	ADD_ASSIGN: "+=",
 	SUB_ASSIGN: "-=",
@@ -223,6 +225,9 @@ var tokens = [...]string{
 	SWITCH: "switch",
 	TYPE:   "type",
 	VAR:    "var",
+
+	QUEST:  "?",
+	BACKSL: `\`,
 }
 
 // String returns the string corresponding to the token tok.

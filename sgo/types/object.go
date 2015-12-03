@@ -7,6 +7,7 @@ package types
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/constant"
 	"github.com/tcard/sgo/sgo/token"
@@ -169,18 +170,37 @@ type Var struct {
 	visited   bool // for initialization cycle detection
 	isField   bool // var is struct field
 	used      bool // set if the variable was used
+	usable    bool // true; but false for refs and left-hand entangled, and then set to true when assigned or collaped
+	collapses []*Var
 }
 
-func NewVar(pos token.Pos, pkg *Package, name string, typ Type) *Var {
-	return &Var{object: object{nil, pos, pkg, name, typ, 0, token.NoPos}}
+func NewVar(pos token.Pos, pkg *Package, name string, typ Type, collapses ...*Var) *Var {
+	return &Var{object: object{nil, pos, pkg, name, typ, 0, token.NoPos}, usable: startsUsable(typ), collapses: collapses}
 }
 
 func NewParam(pos token.Pos, pkg *Package, name string, typ Type) *Var {
-	return &Var{object: object{nil, pos, pkg, name, typ, 0, token.NoPos}, used: true} // parameters are always 'used'
+	return &Var{object: object{nil, pos, pkg, name, typ, 0, token.NoPos}, usable: startsUsable(typ), used: true} // parameters are always 'used'
+}
+
+func startsUsable(typ Type) bool {
+	if typ == nil {
+		return false
+	}
+	return !isPointer(typ) && !IsInterface(typ) && !isSignature(typ) && !isMap(typ)
+}
+
+func (obj *Var) setType(typ Type) {
+	obj.object.typ = typ
+	if !obj.isField {
+		obj.usable = startsUsable(typ)
+		if debugUsable {
+			fmt.Println("USABLE 5", obj.name, obj.usable)
+		}
+	}
 }
 
 func NewField(pos token.Pos, pkg *Package, name string, typ Type, anonymous bool) *Var {
-	return &Var{object: object{nil, pos, pkg, name, typ, 0, token.NoPos}, anonymous: anonymous, isField: true}
+	return &Var{object: object{nil, pos, pkg, name, typ, 0, token.NoPos}, usable: true, anonymous: anonymous, isField: true}
 }
 
 func (obj *Var) Anonymous() bool { return obj.anonymous }

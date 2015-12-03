@@ -7,6 +7,8 @@
 package types
 
 import (
+	"fmt"
+
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/token"
 )
@@ -119,7 +121,11 @@ func (check *Checker) initVar(lhs *Var, x *operand, result bool) Type {
 			}
 			typ = defaultType(typ)
 		}
-		lhs.typ = typ
+		lhs.setType(typ)
+		lhs.usable = true
+		if debugUsable {
+			fmt.Println("USABLE 1", lhs.name, lhs.usable)
+		}
 	}
 
 	if !check.assignment(x, lhs.typ) {
@@ -165,6 +171,10 @@ func (check *Checker) assignVar(lhs ast.Expr, x *operand) Type {
 			v, _ = obj.(*Var)
 			if v != nil {
 				v_used = v.used
+				v.usable = true
+				if debugUsable {
+					fmt.Println("USABLE 2", v.name, v.usable)
+				}
 			}
 		}
 	}
@@ -203,10 +213,23 @@ func (check *Checker) assignVar(lhs ast.Expr, x *operand) Type {
 
 // If returnPos is valid, initVars is called to type-check the assignment of
 // return expressions, and returnPos is the position of the return statement.
-func (check *Checker) initVars(lhs []*Var, rhs []ast.Expr, returnPos token.Pos) {
+func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Pos, lastEntangled bool) {
 	l := len(lhs)
-	get, r, commaOk := unpack(func(x *operand, i int) { check.expr(x, rhs[i]) }, len(rhs), l == 2 && !returnPos.IsValid())
-	if get == nil || l != r {
+	lhsStarts, lhsEnds := 0, l
+	get := func(x *operand, i int) { check.expr(x, rhs.List[i]) }
+	if lastEntangled {
+		if rhs.EntangledPos == 0 {
+			// return \ err
+			lhsStarts = l - 1
+		} else if rhs.EntangledPos == len(rhs.List) {
+			// return x, y, z \
+			lhsEnds--
+		} else {
+			// x, y \ err := ...
+		}
+	}
+	get, r, commaOk := unpack(get, len(rhs.List), l == 2 && !returnPos.IsValid())
+	if get == nil || r != lhsEnds-lhsStarts {
 		// invalidate lhs and use rhs
 		for _, obj := range lhs {
 			if obj.typ == nil {
@@ -217,11 +240,12 @@ func (check *Checker) initVars(lhs []*Var, rhs []ast.Expr, returnPos token.Pos) 
 			return // error reported by unpack
 		}
 		check.useGetter(get, r)
+		// TODO: Error reporting for entangled could be better.
 		if returnPos.IsValid() {
-			check.errorf(returnPos, "wrong number of return values (want %d, got %d)", l, r)
+			check.errorf(returnPos, "wrong number of return values (want %d, got %d)", lhsEnds-lhsStarts, r)
 			return
 		}
-		check.errorf(rhs[0].Pos(), "assignment count mismatch (%d vs %d)", l, r)
+		check.errorf(rhs.List[0].Pos(), "assignment count mismatch (%d vs %d)", lhsEnds-lhsStarts, r)
 		return
 	}
 
@@ -232,13 +256,13 @@ func (check *Checker) initVars(lhs []*Var, rhs []ast.Expr, returnPos token.Pos) 
 			get(&x, i)
 			a[i] = check.initVar(lhs[i], &x, returnPos.IsValid())
 		}
-		check.recordCommaOkTypes(rhs[0], a)
+		check.recordCommaOkTypes(rhs.List[0], a)
 		return
 	}
 
-	for i, lhs := range lhs {
+	for i := 0; i < lhsEnds-lhsStarts; i++ {
 		get(&x, i)
-		check.initVar(lhs, &x, returnPos.IsValid())
+		check.initVar(lhs[i+lhsStarts], &x, returnPos.IsValid())
 	}
 }
 
@@ -271,13 +295,13 @@ func (check *Checker) assignVars(lhs, rhs []ast.Expr) {
 	}
 }
 
-func (check *Checker) shortVarDecl(pos token.Pos, lhs, rhs []ast.Expr) {
+func (check *Checker) shortVarDecl(pos token.Pos, lhs, rhs *ast.ExprList) {
 	scope := check.scope
 
 	// collect lhs variables
 	var newVars []*Var
-	var lhsVars = make([]*Var, len(lhs))
-	for i, lhs := range lhs {
+	var lhsVars = make([]*Var, len(lhs.List))
+	for i, lhs := range lhs.List {
 		var obj *Var
 		if ident, _ := lhs.(*ast.Ident); ident != nil {
 			// Use the correct obj if the ident is redeclared. The
@@ -310,7 +334,7 @@ func (check *Checker) shortVarDecl(pos token.Pos, lhs, rhs []ast.Expr) {
 		lhsVars[i] = obj
 	}
 
-	check.initVars(lhsVars, rhs, token.NoPos)
+	check.initVars(lhsVars, rhs, token.NoPos, lhs.EntangledPos != -1)
 
 	// declare new variables
 	if len(newVars) > 0 {
@@ -318,11 +342,21 @@ func (check *Checker) shortVarDecl(pos token.Pos, lhs, rhs []ast.Expr) {
 		// a function begins at the end of the ConstSpec or VarSpec (ShortVarDecl
 		// for short variable declarations) and ends at the end of the innermost
 		// containing block."
-		scopePos := rhs[len(rhs)-1].End()
+		scopePos := rhs.List[len(rhs.List)-1].End()
 		for _, obj := range newVars {
 			check.declare(scope, nil, obj, scopePos) // recordObject already called
 		}
 	} else {
 		check.softErrorf(pos, "no new variables on left side of :=")
+	}
+
+	if lhs.EntangledPos != -1 {
+		lhsVars[len(lhsVars)-1].collapses = lhsVars[:len(lhsVars)-1]
+		for _, v := range lhsVars[:len(lhsVars)-1] {
+			v.usable = false
+			if debugUsable {
+				fmt.Println("USABLE 3", v.name, v.usable)
+			}
+		}
 	}
 }

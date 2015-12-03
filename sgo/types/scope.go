@@ -9,10 +9,11 @@ package types
 import (
 	"bytes"
 	"fmt"
-	"github.com/tcard/sgo/sgo/token"
 	"io"
 	"sort"
 	"strings"
+
+	"github.com/tcard/sgo/sgo/token"
 )
 
 // TODO(gri) Provide scopes with a name or other mechanism so that

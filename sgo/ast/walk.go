@@ -206,8 +206,8 @@ func Walk(v Visitor, node Node) {
 		Walk(v, n.X)
 
 	case *AssignStmt:
-		walkExprList(v, n.Lhs)
-		walkExprList(v, n.Rhs)
+		walkExprList(v, n.Lhs.List)
+		walkExprList(v, n.Rhs.List)
 
 	case *GoStmt:
 		Walk(v, n.Call)
@@ -216,7 +216,7 @@ func Walk(v Visitor, node Node) {
 		Walk(v, n.Call)
 
 	case *ReturnStmt:
-		walkExprList(v, n.Results)
+		walkExprList(v, n.Results.List)
 
 	case *BranchStmt:
 		if n.Label != nil {
@@ -237,7 +237,7 @@ func Walk(v Visitor, node Node) {
 		}
 
 	case *CaseClause:
-		walkExprList(v, n.List)
+		walkExprList(v, n.List.List)
 		walkStmtList(v, n.Body)
 
 	case *SwitchStmt:
@@ -308,7 +308,7 @@ func Walk(v Visitor, node Node) {
 		if n.Type != nil {
 			Walk(v, n.Type)
 		}
-		walkExprList(v, n.Values)
+		walkExprList(v, n.Values.List)
 		if n.Comment != nil {
 			Walk(v, n.Comment)
 		}

@@ -317,7 +317,7 @@ func (c *converser) convertTypeName(v *gotypes.TypeName) *types.TypeName {
 
 	ret := types.NewTypeName(
 		token.Pos(v.Pos()),
-		c.ret,
+		c.convertPackage(v.Pkg()),
 		v.Name(),
 		typ,
 	)
@@ -350,6 +350,10 @@ func (c *converser) convertType(v gotypes.Type) types.Type {
 		ret = c.convertArray(v)
 	case *gotypes.Signature:
 		ret = c.convertSignature(v)
+	case *gotypes.Chan:
+		ret = c.convertChan(v)
+	case *gotypes.Map:
+		ret = c.convertMap(v)
 	default:
 		panic(fmt.Sprintf("unhandled Type %T", v))
 	}
@@ -363,6 +367,9 @@ func (c *converser) convertNamed(v *gotypes.Named) *types.Named {
 	}
 	if v, ok := c.converted[v]; ok {
 		return v.(*types.Named)
+	}
+	if gotypes.Universe.Lookup("error").(*gotypes.TypeName).Type().(*gotypes.Named) == v {
+		return types.Universe.Lookup("error").(*types.TypeName).Type().(*types.Named)
 	}
 	ret := types.NewNamed(
 		c.convertTypeName(v.Obj()),
@@ -473,6 +480,30 @@ func (c *converser) convertArray(v *gotypes.Array) *types.Array {
 		return v.(*types.Array)
 	}
 	ret := types.NewArray(c.convertType(v.Elem()), v.Len())
+	c.converted[v] = ret
+	return ret
+}
+
+func (c *converser) convertChan(v *gotypes.Chan) *types.Chan {
+	if v == nil {
+		return nil
+	}
+	if v, ok := c.converted[v]; ok {
+		return v.(*types.Chan)
+	}
+	ret := types.NewChan(types.ChanDir(v.Dir()), c.convertType(v.Elem()))
+	c.converted[v] = ret
+	return ret
+}
+
+func (c *converser) convertMap(v *gotypes.Map) *types.Map {
+	if v == nil {
+		return nil
+	}
+	if v, ok := c.converted[v]; ok {
+		return v.(*types.Map)
+	}
+	ret := types.NewMap(c.convertType(v.Key()), c.convertType(v.Elem()))
 	c.converted[v] = ret
 	return ret
 }

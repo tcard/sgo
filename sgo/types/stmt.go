@@ -102,7 +102,7 @@ func (check *Checker) multipleDefaults(list []ast.Stmt) {
 		var d ast.Stmt
 		switch c := s.(type) {
 		case *ast.CaseClause:
-			if len(c.List) == 0 {
+			if len(c.List.List) == 0 {
 				d = s
 			}
 		case *ast.CommClause:
@@ -287,7 +287,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 	case *ast.AssignStmt:
 		switch s.Tok {
 		case token.ASSIGN, token.DEFINE:
-			if len(s.Lhs) == 0 {
+			if len(s.Lhs.List) == 0 {
 				check.invalidAST(s.Pos(), "missing lhs in assignment")
 				return
 			}
@@ -295,12 +295,12 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				check.shortVarDecl(s.TokPos, s.Lhs, s.Rhs)
 			} else {
 				// regular assignment
-				check.assignVars(s.Lhs, s.Rhs)
+				check.assignVars(s.Lhs.List, s.Rhs.List)
 			}
 
 		default:
 			// assignment operations
-			if len(s.Lhs) != 1 || len(s.Rhs) != 1 {
+			if len(s.Lhs.List) != 1 || len(s.Rhs.List) != 1 {
 				check.errorf(s.TokPos, "assignment operation %s requires single-valued expressions", s.Tok)
 				return
 			}
@@ -310,11 +310,11 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				return
 			}
 			var x operand
-			check.binary(&x, nil, s.Lhs[0], s.Rhs[0], op)
+			check.binary(&x, nil, s.Lhs.List[0], s.Rhs.List[0], op)
 			if x.mode == invalid {
 				return
 			}
-			check.assignVar(s.Lhs[0], &x)
+			check.assignVar(s.Lhs.List[0], &x)
 		}
 
 	case *ast.GoStmt:
@@ -328,7 +328,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		if res.Len() > 0 {
 			// function returns results
 			// (if one, say the first, result parameter is named, all of them are named)
-			if len(s.Results) == 0 && res.vars[0].name != "" {
+			if len(s.Results.List) == 0 && res.vars[0].name != "" {
 				// spec: "Implementation restriction: A compiler may disallow an empty expression
 				// list in a "return" statement if a different entity (constant, type, or variable)
 				// with the same name as a result parameter is in scope at the place of the return."
@@ -341,11 +341,11 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				}
 			} else {
 				// return has results or result parameters are unnamed
-				check.initVars(res.vars, s.Results, s.Return)
+				check.initVars(res.vars, s.Results, s.Return, res.lastEntangled)
 			}
-		} else if len(s.Results) > 0 {
-			check.error(s.Results[0].Pos(), "no result values expected")
-			check.use(s.Results...)
+		} else if len(s.Results.List) > 0 {
+			check.error(s.Results.List[0].Pos(), "no result values expected")
+			check.use(s.Results.List...)
 		}
 
 	case *ast.BranchStmt:
@@ -387,34 +387,98 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			check.error(s.Cond.Pos(), "non-boolean condition in if statement")
 		}
 
-		opts := check.unpackedOptionals(x)
+		opts := check.unwrappedOptionals(x)
+		var collapsed []*Var
 
-		if len(opts) > 0 {
+		handleOpts := func(inElse bool) {
 			for _, opt := range opts {
-				if opt.isNil {
-					continue
+				if (!inElse && opt.isNil) || (inElse && !opt.isNil) {
+					sc := check.scope
+					if inElse {
+						sc = sc.Parent()
+					}
+					_, v := sc.LookupParent(opt.ident.Name, token.NoPos)
+					if v, ok := v.(*Var); ok {
+						for _, c := range v.collapses {
+							if !c.usable {
+								c.usable = true
+								if debugUsable {
+									fmt.Println("USABLE 6", c.name, c.usable)
+								}
+								collapsed = append(collapsed, c)
+							}
+						}
+					}
 				}
-				v := NewVar(-1, check.pkg, opt.ident.Name, opt.typ)
-				v.used = true
-				check.scope.Insert(v)
+				newVar := NewVar(-1, check.pkg, opt.ident.Name, opt.typ)
+				newVar.usable = true
+				if debugUsable {
+					fmt.Println("USABLE 7", newVar.name, newVar.usable)
+				}
+				newVar.used = true
+				check.scope.Insert(newVar)
 			}
 		}
-		check.stmt(inner, s.Body)
 
-		if s.Else != nil {
-			if len(opts) > 0 {
-				check.openScope(s, "else")
-				defer check.closeScope()
-				for _, opt := range opts {
-					if !opt.isNil {
-						continue
-					}
-					v := NewVar(-1, check.pkg, opt.ident.Name, opt.typ)
-					v.used = true
-					check.scope.Insert(v)
+		if len(opts) > 0 {
+			handleOpts(false)
+		}
+
+		wereUsable := map[*Var]bool{}
+		sc := check.scope.Parent()
+		for sc != nil {
+			names := sc.Names()
+			for _, name := range names {
+				if v, ok := sc.Lookup(name).(*Var); ok {
+					wereUsable[v] = v.usable
 				}
 			}
+			sc = sc.Parent()
+		}
+
+		check.stmt(inner, s.Body)
+
+		usableAfterBody := map[*Var]bool{}
+		for v, wasUsable := range wereUsable {
+			if v.usable {
+				usableAfterBody[v] = true
+			}
+			v.usable = wasUsable
+			if debugUsable {
+				fmt.Println("USABLE 8", v.name, v.usable)
+			}
+		}
+
+		for _, c := range collapsed {
+			c.usable = false
+			if debugUsable {
+				fmt.Println("USABLE 9", c.name, c.usable)
+			}
+		}
+
+		if s.Else != nil {
+			collapsed = nil
+			if len(opts) > 0 {
+				handleOpts(true)
+			}
+
 			check.stmt(inner, s.Else)
+
+			for v, wasUsable := range wereUsable {
+				if !(v.usable && usableAfterBody[v]) {
+					v.usable = wasUsable
+					if debugUsable {
+						fmt.Println("USABLE 10", v.name, v.usable)
+					}
+				}
+			}
+
+			for _, c := range collapsed {
+				c.usable = false
+				if debugUsable {
+					fmt.Println("USABLE 11", c.name, c.usable)
+				}
+			}
 		}
 
 	case *ast.SwitchStmt:
@@ -444,7 +508,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				continue
 			}
 			if x.mode != invalid {
-				check.caseValues(x, clause.List)
+				check.caseValues(x, clause.List.List)
 			}
 			check.openScope(clause, "case")
 			inner := inner
@@ -476,12 +540,12 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		case *ast.ExprStmt:
 			rhs = guard.X
 		case *ast.AssignStmt:
-			if len(guard.Lhs) != 1 || guard.Tok != token.DEFINE || len(guard.Rhs) != 1 {
+			if len(guard.Lhs.List) != 1 || guard.Tok != token.DEFINE || len(guard.Rhs.List) != 1 {
 				check.invalidAST(s.Pos(), "incorrect form of type switch guard")
 				return
 			}
 
-			lhs, _ = guard.Lhs[0].(*ast.Ident)
+			lhs, _ = guard.Lhs.List[0].(*ast.Ident)
 			if lhs == nil {
 				check.invalidAST(s.Pos(), "incorrect form of type switch guard")
 				return
@@ -495,7 +559,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				check.recordDef(lhs, nil) // lhs variable is implicitly declared in each cause clause
 			}
 
-			rhs = guard.Rhs[0]
+			rhs = guard.Rhs.List[0]
 
 		default:
 			check.invalidAST(s.Pos(), "incorrect form of type switch guard")
@@ -530,7 +594,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				continue
 			}
 			// Check each type in this type switch case.
-			T := check.caseTypes(&x, xtyp, clause.List, seen)
+			T := check.caseTypes(&x, xtyp, clause.List.List, seen)
 			check.openScope(clause, "case")
 			// If lhs exists, declare a corresponding variable in the case-local scope.
 			if lhs != nil {
@@ -539,7 +603,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				// the implicit block in each clause. In clauses with a case listing
 				// exactly one type, the variable has that type; otherwise, the variable
 				// has the type of the expression in the TypeSwitchGuard."
-				if len(clause.List) != 1 || T == nil {
+				if len(clause.List.List) != 1 || T == nil {
 					T = x.typ
 				}
 				obj := NewVar(lhs.Pos(), check.pkg, lhs.Name, T)
@@ -590,8 +654,8 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			case nil, *ast.SendStmt:
 				valid = true
 			case *ast.AssignStmt:
-				if len(s.Rhs) == 1 {
-					rhs = s.Rhs[0]
+				if len(s.Rhs.List) == 1 {
+					rhs = s.Rhs.List[0]
 				}
 			case *ast.ExprStmt:
 				rhs = s.X
@@ -635,7 +699,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		// declaration, but the post statement must not."
 		if s, _ := s.Post.(*ast.AssignStmt); s != nil && s.Tok == token.DEFINE {
 			check.softErrorf(s.Pos(), "cannot declare in post statement")
-			check.use(s.Lhs...) // avoid follow-up errors
+			check.use(s.Lhs.List...) // avoid follow-up errors
 		}
 		check.stmt(inner, s.Body)
 
@@ -776,10 +840,10 @@ type unpackedOptional struct {
 	isNil bool
 }
 
-// unpackedOptionals looks up in a boolean expression all the variables of
+// unwrappedOptionals looks up in a boolean expression all the variables of
 // optional type such that the expression can only be true iff they are nil xor
 // non-nil and returns their necessary value together with their idents.
-func (checker *Checker) unpackedOptionals(x operand) []unpackedOptional {
+func (checker *Checker) unwrappedOptionals(x operand) []unpackedOptional {
 	// TODO: Cover more cases
 	var opts []unpackedOptional
 	switch v := x.expr.(type) {

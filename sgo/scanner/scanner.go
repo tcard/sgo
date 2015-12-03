@@ -742,10 +742,12 @@ scanAgain:
 			} else {
 				tok = s.switch3(token.AND, token.AND_ASSIGN, '&', token.LAND)
 			}
-		case '?':
-			tok = token.QUEST
 		case '|':
 			tok = s.switch3(token.OR, token.OR_ASSIGN, '|', token.LOR)
+		case '?':
+			tok = token.QUEST
+		case '\\':
+			tok = token.BACKSL
 		default:
 			// next reports unexpected BOMs - don't repeat
 			if ch != bom {
