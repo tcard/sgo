@@ -151,9 +151,15 @@ func (check *Checker) funcType(sig *Signature, recvPar *ast.FieldList, ftyp *ast
 	scope := NewScope(check.scope, token.NoPos, token.NoPos, "function")
 	check.recordScope(ftyp, scope)
 
-	recvList, _, _ := check.collectParams(scope, recvPar, false)
-	params, _, variadic := check.collectParams(scope, ftyp.Params, true)
-	results, entangled, _ := check.collectParams(scope, ftyp.Results, false)
+	recvList, entangledRecvList, _ := check.collectParams(scope, recvPar, false)
+	if entangledRecvList != nil {
+		check.error(entangledRecvList.Pos(), "entangled variable in method receiver")
+	}
+	params, entangledParam, variadic := check.collectParams(scope, ftyp.Params, true)
+	if entangledParam != nil && variadic {
+		check.error(entangledRecvList.Pos(), "variadic function cannot have entangled parameters")
+	}
+	results, entangledResult, _ := check.collectParams(scope, ftyp.Results, false)
 
 	if recvPar != nil {
 		// recv parameter list present (may be empty)
@@ -205,12 +211,8 @@ func (check *Checker) funcType(sig *Signature, recvPar *ast.FieldList, ftyp *ast
 	}
 
 	sig.scope = scope
-	sig.params = NewTuple(params...)
-	if entangled {
-		sig.results = NewTupleEntangled(results...)
-	} else {
-		sig.results = NewTuple(results...)
-	}
+	sig.params = NewTupleEntangled(append(params, entangledParam)...)
+	sig.results = NewTupleEntangled(append(results, entangledResult)...)
 	sig.variadic = variadic
 }
 
@@ -401,13 +403,17 @@ func (check *Checker) arrayLength(e ast.Expr) int64 {
 	return n
 }
 
-func (check *Checker) collectParams(scope *Scope, list *ast.FieldList, variadicOk bool) (params []*Var, lastEntangled bool, variadic bool) {
+func (check *Checker) collectParams(scope *Scope, list *ast.FieldList, variadicOk bool) (params []*Var, entangled *Var, variadic bool) {
 	if list == nil {
 		return
 	}
 
 	var named, anonymous bool
-	for i, field := range list.List {
+	for i, field := range append(list.List, list.Entangled) {
+		isEntangled := i == len(list.List)
+		if isEntangled && field == nil {
+			continue
+		}
 		ftype := field.Type
 		if t, _ := ftype.(*ast.Ellipsis); t != nil {
 			ftype = t.Elt
@@ -419,7 +425,7 @@ func (check *Checker) collectParams(scope *Scope, list *ast.FieldList, variadicO
 			}
 		}
 		typ := check.typ(ftype)
-		if list.LastEntangled && i == len(list.List)-1 {
+		if isEntangled {
 			typ = NewOptional(typ)
 		}
 		// The parser ensures that f.Tag is nil and we don't
@@ -433,20 +439,22 @@ func (check *Checker) collectParams(scope *Scope, list *ast.FieldList, variadicO
 				}
 				par := NewParam(name.Pos(), check.pkg, name.Name, typ)
 				check.declare(scope, name, par, scope.pos)
-				if list.LastEntangled && i == len(list.List)-1 {
-					lastEntangled = true
+				if isEntangled {
+					entangled = par
+				} else {
+					params = append(params, par)
 				}
-				params = append(params, par)
 			}
 			named = true
 		} else {
 			// anonymous parameter
 			par := NewParam(ftype.Pos(), check.pkg, "", typ)
 			check.recordImplicit(field, par)
-			if list.LastEntangled && i == len(list.List)-1 {
-				lastEntangled = true
+			if isEntangled {
+				entangled = par
+			} else {
+				params = append(params, par)
 			}
-			params = append(params, par)
 			anonymous = true
 		}
 	}

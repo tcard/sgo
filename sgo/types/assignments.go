@@ -124,7 +124,7 @@ func (check *Checker) initVar(lhs *Var, x *operand, result bool) Type {
 		lhs.setType(typ)
 		lhs.usable = true
 		if debugUsable {
-			fmt.Println("USABLE 1", lhs.name, lhs.usable)
+			fmt.Println("USABLE initVar:", lhs.name, fmt.Sprintf("%p", lhs), lhs.usable)
 		}
 	}
 
@@ -173,7 +173,7 @@ func (check *Checker) assignVar(lhs ast.Expr, x *operand) Type {
 				v_used = v.used
 				v.usable = true
 				if debugUsable {
-					fmt.Println("USABLE 2", v.name, v.usable)
+					fmt.Println("USABLE assignVar:", v.name, fmt.Sprintf("%p", v), v.usable)
 				}
 			}
 		}
@@ -213,23 +213,51 @@ func (check *Checker) assignVar(lhs ast.Expr, x *operand) Type {
 
 // If returnPos is valid, initVars is called to type-check the assignment of
 // return expressions, and returnPos is the position of the return statement.
-func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Pos, lastEntangled bool) {
-	l := len(lhs)
-	lhsStarts, lhsEnds := 0, l
-	get := func(x *operand, i int) { check.expr(x, rhs.List[i]) }
-	if lastEntangled {
-		if rhs.EntangledPos == 0 {
-			// return \ err
-			lhsStarts = l - 1
-		} else if rhs.EntangledPos == len(rhs.List) {
-			// return x, y, z \
-			lhsEnds--
+func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Pos, entangledLhs *Var) {
+	var l int
+
+	rhsIsEntangled := false
+	if rhs.EntangledPos == -1 {
+		var x operand
+		check.expr(&x, rhs.List[0])
+		if t, ok := x.typ.(*Tuple); ok {
+			if t.entangled != nil {
+				// a, b \ c := f()
+				l = len(lhs) + 1
+				rhsIsEntangled = true
+			} else {
+				// a, b, c := f()
+				l = len(lhs)
+			}
 		} else {
-			// x, y \ err := ...
+			// a, b, c := x, y, z
+			l = len(lhs)
 		}
+	} else if rhs.EntangledPos == 0 {
+		// a, b \ c := \ z
+		rhsIsEntangled = true
+		l = 1
+	} else if rhs.EntangledPos == len(rhs.List) {
+		// a, b \ c := x, y \
+		rhsIsEntangled = true
+		l = len(lhs)
+	} else {
+		rhsIsEntangled = true
+		check.error(rhs.List[0].Pos(), "must have values at either side of \\, not both")
 	}
-	get, r, commaOk := unpack(get, len(rhs.List), l == 2 && !returnPos.IsValid())
-	if get == nil || r != lhsEnds-lhsStarts {
+
+	if !rhsIsEntangled && entangledLhs != nil {
+		check.error(rhs.List[0].Pos(), "expected entangled assignment, but right-hand side is not entangled")
+	} else if rhsIsEntangled && entangledLhs == nil {
+		check.error(lhs[0].Pos(), "expected entangled assignment, but left-hand side is not entangled")
+	}
+
+	// if rhsEntangled == entangledRight {
+	// 	l = 1
+	// }
+
+	get, r, commaOk := unpack(func(x *operand, i int) { check.expr(x, rhs.List[i]) }, len(rhs.List), l == 2 && entangledLhs == nil && !returnPos.IsValid())
+	if get == nil || l != r {
 		// invalidate lhs and use rhs
 		for _, obj := range lhs {
 			if obj.typ == nil {
@@ -242,10 +270,10 @@ func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Po
 		check.useGetter(get, r)
 		// TODO: Error reporting for entangled could be better.
 		if returnPos.IsValid() {
-			check.errorf(returnPos, "wrong number of return values (want %d, got %d)", lhsEnds-lhsStarts, r)
+			check.errorf(returnPos, "wrong number of return values (want %d, got %d)", l, r)
 			return
 		}
-		check.errorf(rhs.List[0].Pos(), "assignment count mismatch (%d vs %d)", lhsEnds-lhsStarts, r)
+		check.errorf(rhs.List[0].Pos(), "assignment count mismatch (%d vs %d)", l, r)
 		return
 	}
 
@@ -260,9 +288,17 @@ func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Po
 		return
 	}
 
-	for i := 0; i < lhsEnds-lhsStarts; i++ {
+	for i, v := range append(lhs, entangledLhs) {
+		if v == nil {
+			continue
+		}
+		if rhs.EntangledPos == 0 && i != len(lhs) {
+			continue
+		} else if rhs.EntangledPos == len(lhs) && i == len(lhs) {
+			continue
+		}
 		get(&x, i)
-		check.initVar(lhs[i+lhsStarts], &x, returnPos.IsValid())
+		check.initVar(v, &x, returnPos.IsValid())
 	}
 }
 
@@ -297,11 +333,17 @@ func (check *Checker) assignVars(lhs, rhs []ast.Expr) {
 
 func (check *Checker) shortVarDecl(pos token.Pos, lhs, rhs *ast.ExprList) {
 	scope := check.scope
+	entangledPos := lhs.EntangledPos
 
 	// collect lhs variables
 	var newVars []*Var
-	var lhsVars = make([]*Var, len(lhs.List))
-	for i, lhs := range lhs.List {
+	var lhsVars = make([]*Var, 0, len(lhs.List))
+	var entangledLhs *Var
+	for i, lhs := range append(lhs.List) {
+		isEntangled := entangledPos > 0 && i == entangledPos
+		if isEntangled && lhs == nil {
+			break
+		}
 		var obj *Var
 		if ident, _ := lhs.(*ast.Ident); ident != nil {
 			// Use the correct obj if the ident is redeclared. The
@@ -331,10 +373,14 @@ func (check *Checker) shortVarDecl(pos token.Pos, lhs, rhs *ast.ExprList) {
 		if obj == nil {
 			obj = NewVar(lhs.Pos(), check.pkg, "_", nil) // dummy variable
 		}
-		lhsVars[i] = obj
+		if isEntangled {
+			entangledLhs = obj
+		} else {
+			lhsVars = append(lhsVars, obj)
+		}
 	}
 
-	check.initVars(lhsVars, rhs, token.NoPos, lhs.EntangledPos != -1)
+	check.initVars(lhsVars, rhs, token.NoPos, entangledLhs)
 
 	// declare new variables
 	if len(newVars) > 0 {
@@ -344,18 +390,21 @@ func (check *Checker) shortVarDecl(pos token.Pos, lhs, rhs *ast.ExprList) {
 		// containing block."
 		scopePos := rhs.List[len(rhs.List)-1].End()
 		for _, obj := range newVars {
+			if obj == nil {
+				break
+			}
 			check.declare(scope, nil, obj, scopePos) // recordObject already called
 		}
 	} else {
 		check.softErrorf(pos, "no new variables on left side of :=")
 	}
 
-	if lhs.EntangledPos != -1 {
-		lhsVars[len(lhsVars)-1].collapses = lhsVars[:len(lhsVars)-1]
-		for _, v := range lhsVars[:len(lhsVars)-1] {
+	if entangledLhs != nil {
+		entangledLhs.collapses = lhsVars
+		for _, v := range lhsVars {
 			v.usable = false
 			if debugUsable {
-				fmt.Println("USABLE 3", v.name, v.usable)
+				fmt.Println("USABLE shortVarDecl:", v.name, fmt.Sprintf("%p", v), v.usable)
 			}
 		}
 	}

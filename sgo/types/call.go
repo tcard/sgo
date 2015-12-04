@@ -76,7 +76,11 @@ func (check *Checker) call(x *operand, e *ast.CallExpr) exprKind {
 			x.mode = novalue
 		case 1:
 			x.mode = value
-			x.typ = sig.results.vars[0].typ // unpack tuple
+			if sig.results.entangled == nil {
+				x.typ = sig.results.vars[0].typ // unpack tuple
+			} else {
+				x.typ = sig.results
+			}
 		default:
 			x.mode = value
 			x.typ = sig.results
@@ -143,11 +147,19 @@ func unpack(get getter, n int, allowCommaOk bool) (getter, int, bool) {
 
 		if t, ok := x0.typ.(*Tuple); ok {
 			// result of an n-valued function call
+			l := t.Len()
+			if t.entangled != nil {
+				l++
+			}
 			return func(x *operand, i int) {
 				x.mode = value
 				x.expr = x0.expr
-				x.typ = t.At(i).typ
-			}, t.Len(), false
+				if i == t.Len() {
+					x.typ = t.Entangled().typ
+				} else {
+					x.typ = t.At(i).typ
+				}
+			}, l, false
 		}
 
 		if x0.mode == mapindex || x0.mode == commaok {

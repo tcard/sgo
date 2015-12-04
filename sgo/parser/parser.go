@@ -578,14 +578,13 @@ func (p *parser) parseExprList(lhs bool) *ast.ExprList {
 	for p.tok == token.COMMA || (list.EntangledPos == -1 && p.tok == token.BACKSL) {
 		prevTok := p.tok
 		p.next()
-		if prevTok == token.BACKSL && (p.tok == token.SEMICOLON || p.tok == token.RBRACE) {
-			list.EntangledPos = len(list.List)
-			break
-		}
-		list.List = append(list.List, p.parseExpr(lhs))
 		if prevTok == token.BACKSL {
 			list.EntangledPos = len(list.List)
+			if p.tok == token.SEMICOLON || p.tok == token.RBRACE {
+				break
+			}
 		}
+		list.List = append(list.List, p.parseExpr(lhs))
 	}
 
 	return list
@@ -927,30 +926,28 @@ func (p *parser) parseReturnParams(scope *ast.Scope) *ast.FieldList {
 		params = p.parseParameterList(scope, false)
 	}
 
-	entangled := false
+	var entangled *ast.Field
 	if p.tok == token.BACKSL {
 		p.next()
 		list, typ := p.parseVarList(false)
 		if len(list.List) != 1 {
 			p.error(p.pos, "entangled return with more than one right-hand variable")
 		}
-		entangled = true
 		if typ != nil {
 			idents := p.makeIdentList(list)
-			field := &ast.Field{Names: idents, Type: typ}
-			params = append(params, field)
+			entangled = &ast.Field{Names: idents, Type: typ}
 			// Go spec: The scope of an identifier denoting a function
 			// parameter or result variable is the function body.
-			p.declare(field, nil, scope, ast.Var, idents...)
+			p.declare(entangled, nil, scope, ast.Var, idents...)
 			p.resolve(typ)
 		} else {
 			p.resolve(list.List[0])
-			params = append(params, &ast.Field{Type: list.List[0]})
+			entangled = &ast.Field{Type: list.List[0]}
 		}
 	}
 
 	rparen := p.expect(token.RPAREN)
-	return &ast.FieldList{Opening: lparen, List: params, Closing: rparen, LastEntangled: entangled}
+	return &ast.FieldList{Opening: lparen, List: params, Closing: rparen, Entangled: entangled}
 }
 
 func (p *parser) parseResult(scope *ast.Scope) *ast.FieldList {

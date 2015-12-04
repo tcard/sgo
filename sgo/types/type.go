@@ -183,8 +183,8 @@ func (p *Pointer) Elem() Type { return p.base }
 // Tuples are used as components of signatures and to represent the type of multiple
 // assignments; they are not first class types of Go.
 type Tuple struct {
-	vars          []*Var
-	lastEntangled bool
+	vars      []*Var
+	entangled *Var
 }
 
 // NewTuple returns a new tuple for the given variables.
@@ -199,7 +199,7 @@ func NewTuple(x ...*Var) *Tuple {
 // variable is an optional entangled with the rest.
 func NewTupleEntangled(x ...*Var) *Tuple {
 	if len(x) > 0 {
-		return &Tuple{vars: x, lastEntangled: true}
+		return &Tuple{vars: x[:len(x)-1], entangled: x[len(x)-1]}
 	}
 	return nil
 }
@@ -212,10 +212,9 @@ func (t *Tuple) Len() int {
 	return 0
 }
 
-// LastEntangled returns whether the last variable in the tuple is entangled
-// with the rest.
-func (t *Tuple) LastEntangled() bool {
-	return t.lastEntangled
+// Entangled returns the variable entangled to the rest of the tuple, or nil.
+func (t *Tuple) Entangled() *Var {
+	return t.entangled
 }
 
 // At returns the i'th variable of tuple t.

@@ -155,7 +155,7 @@ func (check *Checker) varDecl(obj *Var, lhs []*Var, typ, init ast.Expr) {
 	} else {
 		obj.usable = true
 		if debugUsable {
-			fmt.Println("USABLE 4", obj.name, obj.usable)
+			fmt.Println("USABLE varDecl:", obj.name, fmt.Sprintf("%p", obj), obj.usable)
 		}
 	}
 
@@ -180,7 +180,7 @@ func (check *Checker) varDecl(obj *Var, lhs []*Var, typ, init ast.Expr) {
 			panic("inconsistent lhs")
 		}
 	}
-	check.initVars(lhs, &ast.ExprList{List: []ast.Expr{init}}, token.NoPos, false)
+	check.initVars(lhs, &ast.ExprList{List: []ast.Expr{init}}, token.NoPos, nil)
 }
 
 // underlying returns the underlying type of typ; possibly by following

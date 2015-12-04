@@ -296,8 +296,8 @@ func (c *converter) convertReturnStmt(v *ast.ReturnStmt) *goast.ReturnStmt {
 	}
 	var results []goast.Expr
 	if v.Results.EntangledPos == 0 {
-		// return | err
-		for i := 0; i < c.lastFunc.Results().Len()-1; i++ {
+		// return \ err
+		for i := 0; i < c.lastFunc.Results().Len(); i++ {
 			typ := c.lastFunc.Results().At(i).Type()
 			var e goast.Expr
 			switch underlying := typ.Underlying().(type) {
@@ -540,6 +540,9 @@ func (c *converter) convertFieldList(v *ast.FieldList) *goast.FieldList {
 	var list []*goast.Field
 	for _, v := range v.List {
 		list = append(list, c.convertField(v))
+	}
+	if v.Entangled != nil {
+		list = append(list, c.convertField(v.Entangled))
 	}
 	return &goast.FieldList{
 		Opening: gotoken.Pos(v.Opening),

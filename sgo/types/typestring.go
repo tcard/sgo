@@ -267,6 +267,14 @@ func writeTuple(buf *bytes.Buffer, tup *Tuple, variadic bool, qf Qualifier, visi
 			}
 			writeType(buf, typ, qf, visited)
 		}
+		if v := tup.entangled; v != nil {
+			buf.WriteString(" \\ ")
+			if v.name != "" {
+				buf.WriteString(v.name)
+				buf.WriteByte(' ')
+			}
+			writeType(buf, v.typ, qf, visited)
+		}
 	}
 	buf.WriteByte(')')
 }

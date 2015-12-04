@@ -341,7 +341,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				}
 			} else {
 				// return has results or result parameters are unnamed
-				check.initVars(res.vars, s.Results, s.Return, res.lastEntangled)
+				check.initVars(res.vars, s.Results, s.Return, res.entangled)
 			}
 		} else if len(s.Results.List) > 0 {
 			check.error(s.Results.List[0].Pos(), "no result values expected")
@@ -403,7 +403,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 							if !c.usable {
 								c.usable = true
 								if debugUsable {
-									fmt.Println("USABLE 6", c.name, c.usable)
+									fmt.Println("USABLE if-else unwrapped collapses:", fmt.Sprintf("(inElse: %v)", inElse), c.name, fmt.Sprintf("%p", c), c.usable)
 								}
 								collapsed = append(collapsed, c)
 							}
@@ -413,15 +413,11 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				newVar := NewVar(-1, check.pkg, opt.ident.Name, opt.typ)
 				newVar.usable = true
 				if debugUsable {
-					fmt.Println("USABLE 7", newVar.name, newVar.usable)
+					fmt.Println("USABLE if-else unwrapped var:", fmt.Sprintf("(inElse: %v)", inElse), newVar.name, fmt.Sprintf("%p", newVar), newVar.usable)
 				}
 				newVar.used = true
 				check.scope.Insert(newVar)
 			}
-		}
-
-		if len(opts) > 0 {
-			handleOpts(false)
 		}
 
 		wereUsable := map[*Var]bool{}
@@ -436,6 +432,10 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			sc = sc.Parent()
 		}
 
+		if len(opts) > 0 {
+			handleOpts(false)
+		}
+
 		check.stmt(inner, s.Body)
 
 		usableAfterBody := map[*Var]bool{}
@@ -445,14 +445,14 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			}
 			v.usable = wasUsable
 			if debugUsable {
-				fmt.Println("USABLE 8", v.name, v.usable)
+				fmt.Println("USABLE if restore usable after body:", v.name, fmt.Sprintf("%p", v), v.usable)
 			}
 		}
 
 		for _, c := range collapsed {
 			c.usable = false
 			if debugUsable {
-				fmt.Println("USABLE 9", c.name, c.usable)
+				fmt.Println("USABLE if reset collapsed to false after body:", c.name, fmt.Sprintf("%p", c), c.usable)
 			}
 		}
 
@@ -468,7 +468,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				if !(v.usable && usableAfterBody[v]) {
 					v.usable = wasUsable
 					if debugUsable {
-						fmt.Println("USABLE 10", v.name, v.usable)
+						fmt.Println("USABLE else restore usable after else:", v.name, fmt.Sprintf("%p", v), v.usable)
 					}
 				}
 			}
@@ -476,7 +476,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			for _, c := range collapsed {
 				c.usable = false
 				if debugUsable {
-					fmt.Println("USABLE 11", c.name, c.usable)
+					fmt.Println("USABLE if reset collapsed to false after body:", c.name, fmt.Sprintf("%p", c), c.usable)
 				}
 			}
 		}

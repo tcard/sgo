@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/tcard/sgo/sgo"
+	"github.com/tcard/sgo/sgo/scanner"
 )
 
 func main() {
@@ -25,7 +26,13 @@ func main() {
 	}
 	err := sgo.TranslateFile(os.Stdout, r, fileName)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if errs, ok := err.(scanner.ErrorList); ok {
+			for _, err := range errs {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		} else {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		os.Exit(1)
 	}
 }

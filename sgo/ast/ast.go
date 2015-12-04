@@ -189,10 +189,10 @@ func (f *Field) End() token.Pos {
 
 // A FieldList represents a list of Fields, enclosed by parentheses or braces.
 type FieldList struct {
-	Opening       token.Pos // position of opening parenthesis/brace, if any
-	List          []*Field  // field list; or nil
-	LastEntangled bool      // is the last field in List entangled to the rest?
-	Closing       token.Pos // position of closing parenthesis/brace, if any
+	Opening   token.Pos // position of opening parenthesis/brace, if any
+	List      []*Field  // field list; or nil
+	Entangled *Field    // field to which List is entangled
+	Closing   token.Pos // position of closing parenthesis/brace, if any
 }
 
 func (f *FieldList) Pos() token.Pos {
@@ -213,6 +213,9 @@ func (f *FieldList) End() token.Pos {
 	}
 	// the list should not be empty in this case;
 	// be conservative and guard against bad ASTs
+	if f.Entangled != nil {
+		return f.Entangled.End()
+	}
 	if n := len(f.List); n > 0 {
 		return f.List[n-1].End()
 	}
