@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/tcard/sgo/sgo"
+	"github.com/tcard/sgo/sgo/scanner"
 )
 
 var (
@@ -47,7 +48,15 @@ func main() {
 					w := &bytes.Buffer{}
 					err := sgo.TranslateFile(w, strings.NewReader(msg.Value.(string)), "name")
 					if err != nil {
-						resp.Value = err.Error()
+						if errs, ok := err.(scanner.ErrorList); ok {
+							var errMsgs []string
+							for _, err := range errs {
+								errMsgs = append(errMsgs, err.Error())
+							}
+							resp.Value = strings.Join(errMsgs, "\n")
+						} else {
+							resp.Value = err.Error()
+						}
 					} else {
 						resp.Value = w.String()
 					}
@@ -156,9 +165,9 @@ type Result struct {
 	a int
 }
 
-func Foo(i int) (*Result \ error) {
+func Foo(i int) (*Result, int \ error) {
 	if i % 2 == 0 {
-		return &Result{i} \
+		return &Result{i}, i * 2 \
 	}
 	// return nil, errors.New("hola") // doesn't compile
 	// return nil, nil         // doesn't compile
@@ -166,16 +175,16 @@ func Foo(i int) (*Result \ error) {
 }
 
 func main() {
-	res \ err := Foo(123)
+	res, i \ err := Foo(123)
 	// _ = err.Error() // doesn't compile
 	if err == nil {
 		// _ = err.Error() // doesn't compile
-		fmt.Println("Result:", res) // will never panic; res will never be nil
+		fmt.Println("Result:", res, "i:", i) // will never panic; res will never be nil
 	} else {
 		fmt.Println("Error:", err.Error())
-		// fmt.Println(res, err) // doesn't compile; a is entangled here
+		// fmt.Println(res, i, err) // doesn't compile; res is entangled here
 	}
-	// fmt.Println(res, err) // doesn't compile; a is entangled here
+	// fmt.Println(res, i, err) // doesn't compile; res is entangled here
 }
 </textarea>
 </div>
