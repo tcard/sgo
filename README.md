@@ -236,6 +236,8 @@ Those types don't have a zero value in SGo. This is a new situation that never h
 
 What happens instead is that an uninitialized variable remains uninitialized, and you can't use it until it is proven that you have initialized it. In structs or arrays, you can't leave a field or element of one or those types unitialized.
 
+**BUG:** Currently, this isn't implemented correctly in some situations. See issues [#2](https://github.com/tcard/sgo/issues/2), [#3](https://github.com/tcard/sgo/issues/3).
+
 ## Type assertions
 
 SGo compiles to Go, and all information about optional types gets lost in translation.
@@ -274,6 +276,8 @@ var x interface{} = m
 // The next line would then cause a nil dereference panic:
 // v["bar"] = 456
 ```
+
+**BUG:** Currently, this doesn't guarantee correctness for composite types. See issue [#1](https://github.com/tcard/sgo/issues/1).
 
 ## Reflection
 
