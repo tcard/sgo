@@ -40,13 +40,30 @@ var m map[string]int = nil // also doesn't compile in SGo, because...
 _ = m["needle"]            // ... would cause a panic if used before initialized.
 ```
 
+## Table of contents
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+
+
+- [The billion dollar mistake](#the-billion-dollar-mistake)
+- [Optional types](#optional-types)
+- [Entangled optionals](#entangled-optionals)
+- [Representation in Go code](#representation-in-go-code)
+- [Zero values of pointers, maps, functions, channels, and interfaces](#zero-values-of-pointers-maps-functions-channels-and-interfaces)
+- [Type assertions](#type-assertions)
+- [Reflection](#reflection)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+
 ## The billion dollar mistake
 
 > "It was the invention of the null reference in 1965. [...] This has led to innumerable errors, vulnerabilities, and system crashes, which have probably caused a billion dollars of pain and damage in the last forty years."
 >
 > C. A. R. Hoare, inventor of nil
 
-`nil`, in Go, is used to represent **the idea of "you expected something to be here, but there is nothing"** for certain types (pointers, slices, interfaces, maps, and functions). This is a very useful concept; not only it can be used by the  logic of your programs to express lack of something (e. g. a `http.Request` can have no body, in which case its `Body` field is `nil`), but also provides a meaningful way of initializing variables and fields of those types.
+`nil`, in Go, is used to represent **the idea of "you expected something to be here, but there is nothing"** for certain types (pointers, slices, interfaces, maps, channels, and functions). This is a very useful concept; not only it can be used by the  logic of your programs to express lack of something (e. g. a `http.Request` can have no body, in which case its `Body` field is `nil`), but also provides a meaningful way of initializing variables and fields of those types.
 
 `nil` has a problem, though. Sometimes **the code expect something to _be something_, but it is `nil` instead**. In those situations, **the program usually crashes**; those are the infamous `invalid memory address or nil pointer dereference` panics. There is no way of preventing those situations except carefully reasoning about what do you write, and hoping that testing catches all of This is often not the case. Even when it is, the process of achieving it is costly, if not because of  crashes in production, because of developer effort spent on it.
 
@@ -54,7 +71,7 @@ In SGo, **this nothingness concept is represented in a way that the compiler can
 
 ## Optional types
 
-In SGo, pointers, interfaces, maps and functions, by themselves can't be `nil`. That is, if you get a pointer, you know that it is pointer somewhere; if you get an interface, you know there's some object implementing it that you can call methods on; if you get a map, you know you can immediately get and put things in it; and, if you get a function, you know you can call it. There's no "hey, I know you asked for this thing but I give you nothing instead". (Slices still can be nil; you can't do anything with it that would cause a nil pointer dereference, so there's no point forbidding that.)
+In SGo, pointers, interfaces, maps, channels and functions by themselves can't be `nil`. That is, if you get a pointer, you know that it is pointer somewhere; if you get an interface, you know there's some object implementing it that you can call methods on; if you get a map, you know you can immediately get and put things in it; if you get a channel, you know you can send and receive things through it without necessarily blocking forever and, if you get a function, you know you can call it. There's no "hey, I know you asked for this thing but I give you nothing instead". (Slices still can be nil; you can't do anything with it that would cause a nil pointer dereference, so there's no point forbidding that.)
 
 If you do want to provide the option of not having something, you use optional types.
 
@@ -160,7 +177,7 @@ if err != nil {
 // nil here.
 ```
 
-A function signature may have at the end of its return list a backslash `\` followed by a type (or a named return with a type), this type being a pointer, map, interface, or function. (It will typically be the `error` interface.)
+A function signature may have at the end of its return list a backslash `\` followed by a type (or a named return with a type), this type being a pointer, map, interface, channel, or function. (It will typically be the `error` interface.)
 
 When calling this function, the last returned value will be an optional. Only once proved, as defined above, that this optional is `nil` you will be able to use the rest of the returned values. (Hence the name "entangled", inspired by _quantum entanglement_, in which collapsing the wavefunction of a particle also causes a collapse in a separate particle that is entangled with it.)
 
@@ -203,32 +220,71 @@ func Divide(dividend, divisor int64) (quotient int64, remainder int64 \ err erro
 
 Optionals introduce absolutely no runtime costs. You can translate from SGo to Go in your head just by removing the `?`s and the `\`s. When in SGo you assign `nil` to an optional variable, in Go you assign `nil` to a variable of the wrapped type. The only difference is that the resulting Go code is proven to be safe to execute (as in "won't crash due to nil") by the SGo compiler.
 
-This is why only pointers, maps, interfaces and functions can be wrapped in optionals. Those are the types which in Go can be `nil`. SGo keeps Go's feature that memory representation is totally obvious at all points, and doesn't introduce new, unfamiliar memory layouts such as tagged unions. Although it can be handy to have `?string`, or `?int`, that would defeat this purpose. You can either continue to use `""` and `0` or `-1` as nothingness for those types, as you usually do in Go, or wrap them in a pointer in the middle (`?*string`, `?*int`).
+This is why only pointers, maps, interfaces, channels and functions can be wrapped in optionals. Those are the types which in Go can be `nil`. (Slices are excluded from this protection, since a nil slice is exactly as safe as a slice with zero elements. You can and should still use nil slices.) SGo keeps Go's feature that memory representation is totally obvious at all points, and doesn't introduce new, unfamiliar memory layouts such as tagged unions. Although it can be handy to have `?string`, or `?int`, that would defeat this purpose. You can either continue to use `""` and `0` or `-1` as nothingness for those types, as you usually do in Go, or wrap them in a pointer in the middle (`?*string`, `?*int`).
 
-## Zero values of pointers, maps, functions and interfaces
+## Zero values of pointers, maps, functions, channels, and interfaces
 
-In Go, declaring a pointer, map, function or interface without initializing it results in implicitly initializing it to `nil`.
+In Go, declaring a pointer, map, function, channel, or interface without initializing it results in implicitly initializing it to `nil`.
 
 ```go
 // Go code; not SGo.
 var x interface{}
-fmt.Println(x) // Prints '<nil>'
+fmt.Println(x) // Prints '<nil>'.
 ```
 
 Those types don't have a zero value in SGo. This is a new situation that never happens in Go, but it is a unavoidable price to pay.
 
 What happens instead is that an uninitialized variable remains uninitialized, and you can't use it until it is proven that you have initialized it. In structs or arrays, you can't leave a field or element of one or those types unitialized.
 
+## Type assertions
+
+SGo compiles to Go, and all information about optional types gets lost in translation.
+
+Because of this, SGo forbids type-asserting directly to pointers, functions, maps, channels, or interfaces.
+
+```go
+var m = map[string]int{"foo": 123}
+var x interface{} = m
+
+// The next line wouldn't compile.
+// v := x.(map[string]int)
+
+// Although x was assigned a map[string]int, when you want to take it back, it gets
+// wrapped in an optional.
+v := x.(?map[string]int)
+if v != nil {
+	// v is again map[string]int here.
+	v["bar"] = 456
+}
+```
+
+This is unfortunate, but necessary due to [the way SGo optionals get translated to Go](#representation-in-go-code). At runtime, SGo programs don't know whether pointers, functions, maps, channels, or interfaces were wrapped in an optional or not when they were defined in the code. To a running SGo program, which is just a running _Go_ program, a value of an optional type, `?T`, has the wrapped type instead, `T`; plus, it can be `nil`. Type assertions use this runtime information, and thus an optional value could be type-asserted to a its wrapped type if SGo didn't forbid the type assertion altogether.
+
+```go
+var m ?map[string]int = nil
+var x interface{} = m
+
+// The next line wouldn't compile.
+// v := x.(map[string]int)
+//
+// If it did compile, at runtime the type assertion would succeed even though
+// x holds really a ?map[string]int, not a map[string]int. But v would be nil,
+// because m is, and a nil map is an illegal situation in SGo.
+//
+// The next line would then cause a nil dereference panic:
+// v["bar"] = 456
+```
+
 ## Reflection
 
-SGo compiles to Go, and all information about optional types gets lost in translation. This means that reflection will ignore it altogether, and just use the underlying Go representation.
+Because, at runtime, SGo programs are just Go, and thus know nothing of optionals, reflection will ignore them altogether, and just use their underlying Go representation.
 
 ```go
 var x ?error
-fmt.Printf("%T\n", x) // Prints 'error', not '?error'
+fmt.Printf("%T\n", x) // Prints 'error', not '?error'.
 ```
 
-So you can use reflection to bypass SGo's guarantees.
+Unfortunately, this means that you can use reflection to bypass SGo's guarantees.
 
 ```go
 type Point struct{ X, Y int }
