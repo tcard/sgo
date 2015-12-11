@@ -314,8 +314,8 @@ func (conf *Config) Check(path string, fset *token.FileSet, files []*ast.File, i
 
 // AssertableTo reports whether a value of type V can be asserted to have type T.
 func AssertableTo(V *Interface, T Type) bool {
-	m, _ := assertableTo(V, T)
-	return m == nil
+	m, _, mustOptional := assertableTo(V, T)
+	return m == nil && !mustOptional
 }
 
 // AssignableTo reports whether a value of type V is assignable to a variable of type T.

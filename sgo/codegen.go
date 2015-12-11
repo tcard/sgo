@@ -285,6 +285,10 @@ func (c *converter) convertStmt(v ast.Stmt) goast.Stmt {
 		return c.convertBlockStmt(v)
 	case *ast.DeclStmt:
 		return c.convertDeclStmt(v)
+	case *ast.TypeSwitchStmt:
+		return c.convertTypeSwitchStmt(v)
+	case *ast.CaseClause:
+		return c.convertCaseClause(v)
 	default:
 		panic(fmt.Sprintf("unhandled Stmt %T", v))
 	}
@@ -383,6 +387,35 @@ func (c *converter) convertBlockStmt(v *ast.BlockStmt) *goast.BlockStmt {
 	}
 }
 
+func (c *converter) convertTypeSwitchStmt(v *ast.TypeSwitchStmt) *goast.TypeSwitchStmt {
+	if v == nil {
+		return nil
+	}
+	return &goast.TypeSwitchStmt{
+		Init:   c.convertStmt(v.Init),
+		Assign: c.convertStmt(v.Assign),
+		Body:   c.convertBlockStmt(v.Body),
+	}
+}
+
+func (c *converter) convertCaseClause(v *ast.CaseClause) *goast.CaseClause {
+	if v == nil {
+		return nil
+	}
+	var list []goast.Expr
+	for _, v := range v.List.List {
+		list = append(list, c.convertExpr(v))
+	}
+	var body []goast.Stmt
+	for _, v := range v.Body {
+		body = append(body, c.convertStmt(v))
+	}
+	return &goast.CaseClause{
+		List: list,
+		Body: body,
+	}
+}
+
 func (c *converter) convertIfStmt(v *ast.IfStmt) *goast.IfStmt {
 	if v == nil {
 		return nil
@@ -431,6 +464,12 @@ func (c *converter) convertExpr(v ast.Expr) goast.Expr {
 		return c.convertParenExpr(v)
 	case *ast.TypeAssertExpr:
 		return c.convertTypeAssertExpr(v)
+	case *ast.MapType:
+		return c.convertMapType(v)
+	case *ast.IndexExpr:
+		return c.convertIndexExpr(v)
+	case *ast.KeyValueExpr:
+		return c.convertKeyValueExpr(v)
 	default:
 		panic(fmt.Sprintf("unhandled Expr %T", v))
 	}
@@ -491,6 +530,36 @@ func (c *converter) convertTypeAssertExpr(v *ast.TypeAssertExpr) *goast.TypeAsse
 	return &goast.TypeAssertExpr{
 		X:    c.convertExpr(v.X),
 		Type: c.convertExpr(v.Type),
+	}
+}
+
+func (c *converter) convertMapType(v *ast.MapType) *goast.MapType {
+	if v == nil {
+		return nil
+	}
+	return &goast.MapType{
+		Key:   c.convertExpr(v.Key),
+		Value: c.convertExpr(v.Value),
+	}
+}
+
+func (c *converter) convertIndexExpr(v *ast.IndexExpr) *goast.IndexExpr {
+	if v == nil {
+		return nil
+	}
+	return &goast.IndexExpr{
+		X:     c.convertExpr(v.X),
+		Index: c.convertExpr(v.Index),
+	}
+}
+
+func (c *converter) convertKeyValueExpr(v *ast.KeyValueExpr) *goast.KeyValueExpr {
+	if v == nil {
+		return nil
+	}
+	return &goast.KeyValueExpr{
+		Key:   c.convertExpr(v.Key),
+		Value: c.convertExpr(v.Value),
 	}
 }
 

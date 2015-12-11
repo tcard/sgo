@@ -608,6 +608,10 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 					T = x.typ
 				}
 				obj := NewVar(lhs.Pos(), check.pkg, lhs.Name, T)
+				obj.usable = true
+				if debugUsable {
+					fmt.Println("USABLE lhs in TypeSwitchStmt:", obj.name, fmt.Sprintf("%p", obj), obj.usable)
+				}
 				scopePos := clause.End()
 				if len(clause.Body) > 0 {
 					scopePos = clause.Body[0].Pos()
