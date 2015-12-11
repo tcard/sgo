@@ -409,14 +409,15 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 							}
 						}
 					}
+				} else {
+					newVar := NewVar(-1, check.pkg, opt.ident.Name, opt.typ)
+					newVar.usable = true
+					if debugUsable {
+						fmt.Println("USABLE if-else unwrapped var:", fmt.Sprintf("(inElse: %v)", inElse), newVar.name, fmt.Sprintf("%p", newVar), newVar.usable)
+					}
+					newVar.used = true
+					check.scope.Insert(newVar)
 				}
-				newVar := NewVar(-1, check.pkg, opt.ident.Name, opt.typ)
-				newVar.usable = true
-				if debugUsable {
-					fmt.Println("USABLE if-else unwrapped var:", fmt.Sprintf("(inElse: %v)", inElse), newVar.name, fmt.Sprintf("%p", newVar), newVar.usable)
-				}
-				newVar.used = true
-				check.scope.Insert(newVar)
 			}
 		}
 
