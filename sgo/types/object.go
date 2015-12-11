@@ -179,7 +179,7 @@ func NewVar(pos token.Pos, pkg *Package, name string, typ Type, collapses ...*Va
 }
 
 func NewParam(pos token.Pos, pkg *Package, name string, typ Type) *Var {
-	return &Var{object: object{nil, pos, pkg, name, typ, 0, token.NoPos}, usable: startsUsable(typ), used: true} // parameters are always 'used'
+	return &Var{object: object{nil, pos, pkg, name, typ, 0, token.NoPos}, usable: true, used: true} // parameters are always 'usable' and 'used'
 }
 
 func startsUsable(typ Type) bool {

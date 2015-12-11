@@ -225,6 +225,19 @@ func (x *operand) assignableTo(conf *Config, T Type) bool {
 		}
 	}
 
+	// x is the predeclared identifier nil and T is an optional.
+	if x.isNil() {
+		switch t := Tu.(type) {
+		case *Basic:
+			if t.kind == UnsafePointer {
+				return true
+			}
+		case *Optional:
+			return true
+		}
+		return false
+	}
+
 	// T is an interface type and x implements T
 	// (Do this check first as it might succeed early.)
 	if Ti, ok := Tu.(*Interface); ok {
@@ -246,20 +259,6 @@ func (x *operand) assignableTo(conf *Config, T Type) bool {
 		if Tc, ok := Tu.(*Chan); ok && Identical(Vc.elem, Tc.elem) {
 			return !isNamed(V) || !isNamed(T)
 		}
-	}
-
-	// x is the predeclared identifier nil and T is a pointer,
-	// function, slice, map, channel, or interface type
-	if x.isNil() {
-		switch t := Tu.(type) {
-		case *Basic:
-			if t.kind == UnsafePointer {
-				return true
-			}
-		case *Optional:
-			return true
-		}
-		return false
 	}
 
 	// x is an untyped constant representable by a value of type T
