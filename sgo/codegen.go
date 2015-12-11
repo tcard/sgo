@@ -425,6 +425,12 @@ func (c *converter) convertExpr(v ast.Expr) goast.Expr {
 		return c.convertFuncType(v)
 	case *ast.FuncLit:
 		return c.convertFuncLit(v)
+	case *ast.InterfaceType:
+		return c.convertInterfaceType(v)
+	case *ast.ParenExpr:
+		return c.convertParenExpr(v)
+	case *ast.TypeAssertExpr:
+		return c.convertTypeAssertExpr(v)
 	default:
 		panic(fmt.Sprintf("unhandled Expr %T", v))
 	}
@@ -464,6 +470,27 @@ func (c *converter) convertSelectorExpr(v *ast.SelectorExpr) *goast.SelectorExpr
 	return &goast.SelectorExpr{
 		X:   c.convertExpr(v.X),
 		Sel: c.convertIdent(v.Sel),
+	}
+}
+
+func (c *converter) convertParenExpr(v *ast.ParenExpr) *goast.ParenExpr {
+	if v == nil {
+		return nil
+	}
+	return &goast.ParenExpr{
+		// Left
+		X: c.convertExpr(v.X),
+		// Right
+	}
+}
+
+func (c *converter) convertTypeAssertExpr(v *ast.TypeAssertExpr) *goast.TypeAssertExpr {
+	if v == nil {
+		return nil
+	}
+	return &goast.TypeAssertExpr{
+		X:    c.convertExpr(v.X),
+		Type: c.convertExpr(v.Type),
 	}
 }
 
@@ -596,6 +623,16 @@ func (c *converter) convertFuncLit(v *ast.FuncLit) *goast.FuncLit {
 	return &goast.FuncLit{
 		Type: c.convertFuncType(v.Type),
 		Body: c.convertBlockStmt(v.Body),
+	}
+}
+
+func (c *converter) convertInterfaceType(v *ast.InterfaceType) *goast.InterfaceType {
+	if v == nil {
+		return nil
+	}
+	return &goast.InterfaceType{
+		Methods:    c.convertFieldList(v.Methods),
+		Incomplete: v.Incomplete,
 	}
 }
 
