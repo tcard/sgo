@@ -67,6 +67,10 @@ type Config struct {
 	// type-checked.
 	IgnoreFuncBodies bool
 
+	// If IgnoreTopLevelVarValues is set, values set at top-level variables are
+	// not type-checked.
+	IgnoreTopLevelVarValues bool
+
 	// If FakeImportC is set, `import "C"` (for packages requiring Cgo)
 	// declares an empty "C" package and errors are omitted for qualified
 	// identifiers referring to package C (which won't find an object).

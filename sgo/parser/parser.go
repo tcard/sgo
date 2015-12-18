@@ -2177,7 +2177,7 @@ func (p *parser) parseForStmt() ast.Stmt {
 		as := s2.(*ast.AssignStmt)
 		// check lhs
 		var key, value ast.Expr
-		switch len(as.Lhs.List) {
+		switch as.Lhs.Len() {
 		case 0:
 			// nothing to do
 		case 1:

@@ -50,6 +50,14 @@ type ExprList struct {
 	EntangledPos int    // before which item in list there is a '|'
 }
 
+// Len returns the lenght of the list of expressions.
+func (l *ExprList) Len() int {
+	if l == nil {
+		return 0
+	}
+	return len(l.List)
+}
+
 func NewExprList(list ...Expr) *ExprList {
 	return &ExprList{List: list, EntangledPos: -1}
 }

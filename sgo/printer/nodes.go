@@ -224,7 +224,12 @@ func (p *printer) exprList(prev0 token.Pos, list *ast.ExprList, depth int, mode 
 			if !needsLinebreak {
 				p.print(x.Pos())
 			}
-			p.print(token.COMMA)
+			if list.EntangledPos == i {
+				p.print(token.BACKSL)
+			} else {
+				p.print(token.COMMA)
+			}
+
 			needsBlank := true
 			if needsLinebreak {
 				// lines are broken using newlines so comments remain aligned
@@ -279,7 +284,11 @@ func (p *printer) parameters(fields *ast.FieldList) {
 	if len(fields.List) > 0 {
 		prevLine := p.lineFor(fields.Opening)
 		ws := indent
-		for i, par := range fields.List {
+		list := fields.List
+		if fields.Entangled != nil {
+			list = append(list, fields.Entangled)
+		}
+		for i, par := range list {
 			// determine par begin and end line (may be different
 			// if there are multiple parameter names for this par
 			// or the type is on a separate line)
@@ -299,7 +308,12 @@ func (p *printer) parameters(fields *ast.FieldList) {
 				if !needsLinebreak {
 					p.print(par.Pos())
 				}
-				p.print(token.COMMA)
+				if par == fields.Entangled {
+					p.print(" ")
+					p.print(token.BACKSL)
+				} else {
+					p.print(token.COMMA)
+				}
 			}
 			// separator if needed (linebreak or blank)
 			if needsLinebreak && p.linebreak(parLineBeg, 0, ws, true) {
@@ -344,6 +358,9 @@ func (p *printer) signature(params, result *ast.FieldList) {
 		p.print(token.LPAREN, token.RPAREN)
 	}
 	n := result.NumFields()
+	if result.Entangled != nil {
+		n++
+	}
 	if n > 0 {
 		// result != nil
 		p.print(blank)
@@ -889,6 +906,10 @@ func (p *printer) expr1(expr ast.Expr, prec1, depth int) {
 		}
 		p.print(blank)
 		p.expr(x.Value)
+
+	case *ast.OptionalType:
+		p.print(token.QUEST)
+		p.expr(x.Elt)
 
 	default:
 		panic("unreachable")

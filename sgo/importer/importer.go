@@ -6,112 +6,92 @@
 package importer
 
 import (
-	"errors"
 	"fmt"
-	goast "go/ast"
-	goconstant "go/constant"
-	goimporter "go/importer"
-	goparser "go/parser"
-	gotoken "go/token"
-	gotypes "go/types"
-	"io"
+	"go/build"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 
+	goconstant "go/constant"
+	goimporter "go/importer"
+	gotypes "go/types"
+
+	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/constant"
+	"github.com/tcard/sgo/sgo/parser"
 	"github.com/tcard/sgo/sgo/token"
 	"github.com/tcard/sgo/sgo/types"
 )
 
-// A Lookup function returns a reader to access package data for
-// a given import path, or an error if no matching package is found.
-type Lookup func(path string) (io.ReadCloser, error)
-
-// For returns an Importer for the given compiler and lookup interface,
-// or nil. Supported compilers are "gc", and "gccgo". If lookup is nil,
-// the default package lookup mechanism for the given compiler is used.
-func For(compiler string, lookup Lookup) types.Importer {
-	wrapped := goimporter.For(compiler, goimporter.Lookup(lookup))
-	if wrapped == nil {
-		return nil
-	}
-	return &importer{wrapped}
-}
-
-// Default returns an Importer for the compiler that built the running binary.
+// Default returns a types.Importer that imports from Go source code and
+// transforms to SGo.
+//
+// Conversion is performed by passing the AST through ConvertAST.
 func Default() types.Importer {
-	return For(runtime.Compiler, nil)
+	return &importer{}
 }
 
-type importer struct {
-	imp gotypes.Importer
-}
+type importer struct{}
 
 func (imp *importer) Import(path string) (*types.Package, error) {
-	gopath := append([]string{os.Getenv("GOROOT")}, strings.Split(os.Getenv("GOPATH"), ":")...)
-	gopkg, anns, err := imp.importFromSrc(path, gopath)
-	if err != nil {
-		gopkg, err = imp.imp.Import(path)
-	}
+	buildPkg, err := build.Import(path, "", build.ImportComment)
 	if err != nil {
 		return nil, err
 	}
-	if anns == nil {
-		anns = map[string]annotation{}
+	fset := token.NewFileSet()
+	var files []*ast.File
+	for _, name := range buildPkg.GoFiles {
+		path := filepath.Join(buildPkg.Dir, name)
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		a, err := parser.ParseFile(fset, name, f, parser.ParseComments)
+		f.Close()
+		if err != nil {
+			return nil, err
+		}
+		ConvertAST(a)
+		files = append(files, a)
 	}
-	conv := &converser{gopkg: gopkg, anns: anns}
-	return conv.convert(), nil
-
+	cfg := &types.Config{
+		IgnoreFuncBodies:        true,
+		IgnoreTopLevelVarValues: true,
+		Importer:                converting{goimporter.Default()},
+	}
+	pkg, err := cfg.Check(path, fset, files, &types.Info{})
+	if err != nil {
+		return nil, err
+	}
+	return pkg, nil
 }
 
-func (imp *importer) importFromSrc(path string, gopath []string) (*gotypes.Package, map[string]annotation, error) {
-	for _, p := range gopath {
-		fullPath := filepath.Join(p, "src", path)
-		fset := gotoken.NewFileSet()
-		pkgs, err := goparser.ParseDir(fset, fullPath, nil, goparser.ParseComments)
-		if err != nil {
-			continue
-		}
-		astPkg, ok := pkgs[path[strings.LastIndex(path, "/")+1:]]
-		if !ok {
-			continue
-		}
-		cfg := &gotypes.Config{
-			Importer: imp.imp,
-		}
-		var files []*goast.File
-		for _, file := range astPkg.Files {
-			files = append(files, file)
-		}
-		pkg, err := cfg.Check(path, fset, files, &gotypes.Info{})
-		if err != nil {
-			continue
-		}
-		annotations := stdAnnotations(pkg, path)
-		if annotations == nil {
-			annotations = annotationsFromAST(pkg, files)
-		}
-		return pkg, annotations, nil
-	}
-	return nil, nil, errors.New("package " + path + " not found")
+type converting struct {
+	imp gotypes.Importer
 }
 
-type converser struct {
+func (c converting) Import(path string) (*types.Package, error) {
+	gopkg, err := c.imp.Import(path)
+	if err != nil {
+		return nil, err
+	}
+	conv := &converter{gopkg: gopkg}
+	conv.convert()
+	return conv.ret, nil
+}
+
+type converter struct {
 	gopkg     *gotypes.Package
 	ret       *types.Package
-	anns      map[string]annotation
 	converted map[interface{}]interface{}
 	ifaces    []*types.Interface
 }
 
-func (c *converser) convert() *types.Package {
+func (c *converter) convert() *types.Package {
 	c.converted = map[interface{}]interface{}{}
 	return c.convertPackage(c.gopkg)
 }
 
-func (c *converser) convertPackage(v *gotypes.Package) *types.Package {
+func (c *converter) convertPackage(v *gotypes.Package) *types.Package {
 	if v == nil {
 		return nil
 	}
@@ -140,7 +120,7 @@ func (c *converser) convertPackage(v *gotypes.Package) *types.Package {
 	return ret
 }
 
-func (c *converser) convertScope(dst *types.Scope, src *gotypes.Scope) {
+func (c *converter) convertScope(dst *types.Scope, src *gotypes.Scope) {
 	for _, name := range src.Names() {
 		dst.Insert(c.convertObject(src.Lookup(name)))
 	}
@@ -151,7 +131,7 @@ func (c *converser) convertScope(dst *types.Scope, src *gotypes.Scope) {
 	}
 }
 
-func (c *converser) convertObject(v gotypes.Object) types.Object {
+func (c *converter) convertObject(v gotypes.Object) types.Object {
 	if v == nil {
 		return nil
 	}
@@ -177,7 +157,7 @@ func (c *converser) convertObject(v gotypes.Object) types.Object {
 	return ret
 }
 
-func (c *converser) convertFunc(v *gotypes.Func) *types.Func {
+func (c *converter) convertFunc(v *gotypes.Func) *types.Func {
 	if v == nil {
 		return nil
 	}
@@ -194,7 +174,7 @@ func (c *converser) convertFunc(v *gotypes.Func) *types.Func {
 	return ret
 }
 
-func (c *converser) convertSignature(v *gotypes.Signature) *types.Signature {
+func (c *converter) convertSignature(v *gotypes.Signature) *types.Signature {
 	if v == nil {
 		return nil
 	}
@@ -211,7 +191,7 @@ func (c *converser) convertSignature(v *gotypes.Signature) *types.Signature {
 	return ret
 }
 
-func (c *converser) convertParamVar(v *gotypes.Var) *types.Var {
+func (c *converter) convertParamVar(v *gotypes.Var) *types.Var {
 	if v == nil {
 		return nil
 	}
@@ -228,7 +208,7 @@ func (c *converser) convertParamVar(v *gotypes.Var) *types.Var {
 	return ret
 }
 
-func (c *converser) convertVar(v *gotypes.Var) *types.Var {
+func (c *converter) convertVar(v *gotypes.Var) *types.Var {
 	if v == nil {
 		return nil
 	}
@@ -245,7 +225,7 @@ func (c *converser) convertVar(v *gotypes.Var) *types.Var {
 	return ret
 }
 
-func (c *converser) convertConst(v *gotypes.Const) *types.Const {
+func (c *converter) convertConst(v *gotypes.Const) *types.Const {
 	if v == nil {
 		return nil
 	}
@@ -263,7 +243,7 @@ func (c *converser) convertConst(v *gotypes.Const) *types.Const {
 	return ret
 }
 
-func (c *converser) convertPkgName(v *gotypes.PkgName) *types.PkgName {
+func (c *converter) convertPkgName(v *gotypes.PkgName) *types.PkgName {
 	if v == nil {
 		return nil
 	}
@@ -280,7 +260,7 @@ func (c *converser) convertPkgName(v *gotypes.PkgName) *types.PkgName {
 	return ret
 }
 
-func (c *converser) convertTuple(v *gotypes.Tuple, conv func(*gotypes.Var) *types.Var) *types.Tuple {
+func (c *converter) convertTuple(v *gotypes.Tuple, conv func(*gotypes.Var) *types.Var) *types.Tuple {
 	if v == nil {
 		return nil
 	}
@@ -296,7 +276,7 @@ func (c *converser) convertTuple(v *gotypes.Tuple, conv func(*gotypes.Var) *type
 	return ret
 }
 
-func (c *converser) convertTypeName(v *gotypes.TypeName) *types.TypeName {
+func (c *converter) convertTypeName(v *gotypes.TypeName) *types.TypeName {
 	if v == nil {
 		return nil
 	}
@@ -304,12 +284,12 @@ func (c *converser) convertTypeName(v *gotypes.TypeName) *types.TypeName {
 		return v.(*types.TypeName)
 	}
 
-	// This part is a bit tricky. If NewTypeName's typ argument is nil, the
-	// function makes it recursive with the newly created *TypeName. So if
-	// we get a *TypeName whose Type() is a *Named whose Obj() is the same
-	// *TypeName, we know it was constructed this way, so do the same.
-	// Otherwise we get in a infinite recursion converting the *TypeName's
-	// type.
+	// This part is a bit tricky. gcimport calls NewTypeName with a nil typ
+	// argument, and then calls NewNamed on the resulting *TypeName, which
+	// sets its typ to a *Named referring to itself. So if we get a *TypeName
+	// whose Type() is a *Named whose Obj() is the same *TypeName, we know it
+	// was constructed this way, so we do the same. Otherwise we get into a
+	// infinite recursion converting the *TypeName's type.
 	var typ types.Type
 	if named, ok := v.Type().(*gotypes.Named); !ok || named.Obj() != v {
 		typ = c.convertType(v.Type())
@@ -321,11 +301,12 @@ func (c *converser) convertTypeName(v *gotypes.TypeName) *types.TypeName {
 		v.Name(),
 		typ,
 	)
+	types.NewNamed(ret, nil, nil)
 	c.converted[v] = ret
 	return ret
 }
 
-func (c *converser) convertType(v gotypes.Type) types.Type {
+func (c *converter) convertType(v gotypes.Type) types.Type {
 	if v == nil {
 		return nil
 	}
@@ -361,7 +342,7 @@ func (c *converser) convertType(v gotypes.Type) types.Type {
 	return ret
 }
 
-func (c *converser) convertNamed(v *gotypes.Named) *types.Named {
+func (c *converter) convertNamed(v *gotypes.Named) *types.Named {
 	if v == nil {
 		return nil
 	}
@@ -384,7 +365,7 @@ func (c *converser) convertNamed(v *gotypes.Named) *types.Named {
 	return ret
 }
 
-func (c *converser) convertPointer(v *gotypes.Pointer) *types.Pointer {
+func (c *converter) convertPointer(v *gotypes.Pointer) *types.Pointer {
 	if v == nil {
 		return nil
 	}
@@ -396,7 +377,7 @@ func (c *converser) convertPointer(v *gotypes.Pointer) *types.Pointer {
 	return ret
 }
 
-func (c *converser) convertBasic(v *gotypes.Basic) *types.Basic {
+func (c *converter) convertBasic(v *gotypes.Basic) *types.Basic {
 	if v == nil {
 		return nil
 	}
@@ -423,7 +404,7 @@ func (c *converser) convertBasic(v *gotypes.Basic) *types.Basic {
 	return ret
 }
 
-func (c *converser) convertStruct(v *gotypes.Struct) *types.Struct {
+func (c *converter) convertStruct(v *gotypes.Struct) *types.Struct {
 	if v == nil {
 		return nil
 	}
@@ -441,7 +422,7 @@ func (c *converser) convertStruct(v *gotypes.Struct) *types.Struct {
 	return ret
 }
 
-func (c *converser) convertInterface(v *gotypes.Interface) *types.Interface {
+func (c *converter) convertInterface(v *gotypes.Interface) *types.Interface {
 	if v == nil {
 		return nil
 	}
@@ -460,7 +441,7 @@ func (c *converser) convertInterface(v *gotypes.Interface) *types.Interface {
 	return ret
 }
 
-func (c *converser) convertSlice(v *gotypes.Slice) *types.Slice {
+func (c *converter) convertSlice(v *gotypes.Slice) *types.Slice {
 	if v == nil {
 		return nil
 	}
@@ -472,7 +453,7 @@ func (c *converser) convertSlice(v *gotypes.Slice) *types.Slice {
 	return ret
 }
 
-func (c *converser) convertArray(v *gotypes.Array) *types.Array {
+func (c *converter) convertArray(v *gotypes.Array) *types.Array {
 	if v == nil {
 		return nil
 	}
@@ -484,7 +465,7 @@ func (c *converser) convertArray(v *gotypes.Array) *types.Array {
 	return ret
 }
 
-func (c *converser) convertChan(v *gotypes.Chan) *types.Chan {
+func (c *converter) convertChan(v *gotypes.Chan) *types.Chan {
 	if v == nil {
 		return nil
 	}
@@ -496,7 +477,7 @@ func (c *converser) convertChan(v *gotypes.Chan) *types.Chan {
 	return ret
 }
 
-func (c *converser) convertMap(v *gotypes.Map) *types.Map {
+func (c *converter) convertMap(v *gotypes.Map) *types.Map {
 	if v == nil {
 		return nil
 	}
@@ -508,7 +489,7 @@ func (c *converser) convertMap(v *gotypes.Map) *types.Map {
 	return ret
 }
 
-func (c *converser) convertConstantValue(v goconstant.Value) constant.Value {
+func (c *converter) convertConstantValue(v goconstant.Value) constant.Value {
 	if v == nil {
 		return nil
 	}

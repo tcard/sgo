@@ -159,11 +159,18 @@ func (check *Checker) varDecl(obj *Var, lhs []*Var, typ, init ast.Expr) {
 		}
 	}
 
+	shouldCheckRhs := !check.conf.IgnoreTopLevelVarValues || check.scope.parent.parent != Universe
+	if obj.typ == nil && !shouldCheckRhs {
+		obj.setType(Typ[Invalid])
+	}
+
 	if lhs == nil || len(lhs) == 1 {
 		assert(lhs == nil || lhs[0] == obj)
-		var x operand
-		check.expr(&x, init)
-		check.initVar(obj, &x, false)
+		if shouldCheckRhs {
+			var x operand
+			check.expr(&x, init)
+			check.initVar(obj, &x, false)
+		}
 		return
 	}
 
@@ -180,7 +187,9 @@ func (check *Checker) varDecl(obj *Var, lhs []*Var, typ, init ast.Expr) {
 			panic("inconsistent lhs")
 		}
 	}
-	check.initVars(lhs, &ast.ExprList{List: []ast.Expr{init}}, token.NoPos, nil)
+	if shouldCheckRhs {
+		check.initVars(lhs, &ast.ExprList{List: []ast.Expr{init}}, token.NoPos, nil)
+	}
 }
 
 // underlying returns the underlying type of typ; possibly by following
