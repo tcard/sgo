@@ -7,11 +7,12 @@ package parser
 import (
 	"bytes"
 	"fmt"
-	"github.com/tcard/sgo/sgo/ast"
-	"github.com/tcard/sgo/sgo/token"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/tcard/sgo/sgo/ast"
+	"github.com/tcard/sgo/sgo/token"
 )
 
 var validFiles = []string{
@@ -136,13 +137,13 @@ func TestColonEqualsScope(t *testing.T) {
 
 	// RHS refers to undefined globals; LHS does not.
 	as := f.Decls[0].(*ast.FuncDecl).Body.List[0].(*ast.AssignStmt)
-	for _, v := range as.Rhs {
+	for _, v := range as.Rhs.List {
 		id := v.(*ast.Ident)
 		if id.Obj != nil {
 			t.Errorf("rhs %s has Obj, should not", id.Name)
 		}
 	}
-	for _, v := range as.Lhs {
+	for _, v := range as.Lhs.List {
 		id := v.(*ast.Ident)
 		if id.Obj == nil {
 			t.Errorf("lhs %s does not have Obj, should", id.Name)
@@ -158,7 +159,7 @@ func TestVarScope(t *testing.T) {
 
 	// RHS refers to undefined globals; LHS does not.
 	as := f.Decls[0].(*ast.FuncDecl).Body.List[0].(*ast.DeclStmt).Decl.(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
-	for _, v := range as.Values {
+	for _, v := range as.Values.List {
 		id := v.(*ast.Ident)
 		if id.Obj != nil {
 			t.Errorf("rhs %s has Obj, should not", id.Name)

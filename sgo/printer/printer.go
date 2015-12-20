@@ -7,14 +7,15 @@ package printer
 
 import (
 	"fmt"
-	"github.com/tcard/sgo/sgo/ast"
-	"github.com/tcard/sgo/sgo/token"
 	"io"
 	"os"
 	"strconv"
 	"strings"
 	"text/tabwriter"
 	"unicode"
+
+	"github.com/tcard/sgo/sgo/ast"
+	"github.com/tcard/sgo/sgo/token"
 )
 
 const (

@@ -140,12 +140,14 @@ func (p *printer) exprList(prev0 token.Pos, list *ast.ExprList, depth int, mode 
 				// comma position for correct comment placement
 				p.print(x.Pos(), token.COMMA, blank)
 			} else if i == list.EntangledPos {
+				p.print(" ")
 				p.print(x.Pos(), token.BACKSL, blank)
 			}
 			p.expr0(x, depth)
 		}
 		if list.EntangledPos == len(list.List) {
-			p.print(0, token.BACKSL, blank)
+			p.print(" ")
+			p.print(token.BACKSL, blank)
 		}
 		return
 	}
@@ -358,7 +360,7 @@ func (p *printer) signature(params, result *ast.FieldList) {
 		p.print(token.LPAREN, token.RPAREN)
 	}
 	n := result.NumFields()
-	if result.Entangled != nil {
+	if result != nil && result.Entangled != nil {
 		n++
 	}
 	if n > 0 {

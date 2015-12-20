@@ -10,7 +10,7 @@ package types_test
 import (
 	"fmt"
 	"github.com/tcard/sgo/sgo/ast"
-	"github.com/tcard/sgo/sgo/build"
+	"go/build"
 	"github.com/tcard/sgo/sgo/importer"
 	"github.com/tcard/sgo/sgo/parser"
 	"github.com/tcard/sgo/sgo/scanner"

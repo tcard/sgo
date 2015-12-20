@@ -47,7 +47,7 @@ type Expr interface {
 // A ExprList represents a list of Exprs.
 type ExprList struct {
 	List         []Expr // expr list; or nil
-	EntangledPos int    // before which item in list there is a '|'
+	EntangledPos int    // before which item in list there is a '\'
 }
 
 // Len returns the lenght of the list of expressions.
@@ -56,6 +56,20 @@ func (l *ExprList) Len() int {
 		return 0
 	}
 	return len(l.List)
+}
+
+func (l *ExprList) Pos() token.Pos {
+	if l == nil || len(l.List) == 0 {
+		return 0
+	}
+	return l.List[0].Pos()
+}
+
+func (l *ExprList) End() token.Pos {
+	if l == nil || len(l.List) == 0 {
+		return 0
+	}
+	return l.List[len(l.List)-1].End()
 }
 
 func NewExprList(list ...Expr) *ExprList {
