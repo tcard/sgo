@@ -181,13 +181,19 @@ func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte)
 		case *ast.InterfaceType:
 			for i := 0; i < len(node.Methods.List); i++ {
 				item := node.Methods.List[i]
-				addDoc(item, item.Names[0], item.Type)
+				if len(item.Names) > 0 {
+					name = item.Names[0]
+				}
+				addDoc(item, name, item.Type)
 			}
 			return visitor
 		case *ast.StructType:
 			for i := 0; i < len(node.Fields.List); i++ {
 				item := node.Fields.List[i]
-				addDoc(item, item.Names[0], item.Type)
+				if len(item.Names) > 0 {
+					name = item.Names[0]
+				}
+				addDoc(item, name, item.Type)
 			}
 			return visitor
 		case *ast.TypeSpec:
