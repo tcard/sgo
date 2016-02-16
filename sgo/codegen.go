@@ -126,9 +126,15 @@ func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte)
 	var err error
 	offset := 0
 	skipNextSpec := false
-	addDoc := func(node ast.Node, typ ast.Expr) {
+	addDoc := func(node ast.Node, name *ast.Ident, typ ast.Expr) {
 		if typ == nil {
 			return
+		}
+		if name != nil && len(name.Name) > 0 {
+			c := name.Name[0]
+			if !(c >= 'A' && c <= 'Z') {
+				return
+			}
 		}
 		buf := &bytes.Buffer{}
 		err = printer.Fprint(buf, fset, typ)
@@ -147,9 +153,11 @@ func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte)
 	var visitor visitorFunc
 	visitor = visitorFunc(func(node ast.Node) (w ast.Visitor) {
 		var typ ast.Expr
+		var name *ast.Ident
 		switch node := node.(type) {
 		case *ast.FuncDecl:
 			typ = node.Type
+			name = node.Name
 		case *ast.GenDecl:
 			if node.Lparen != 0 || node.Tok == token.IMPORT || node.Tok == token.CONST {
 				return visitor
@@ -158,9 +166,13 @@ func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte)
 			case *ast.TypeSpec:
 				skipNextSpec = true
 				typ = spec.Type
+				name = spec.Name
 			case *ast.ValueSpec:
 				skipNextSpec = true
 				typ = spec.Type
+				if len(spec.Names) > 0 {
+					name = spec.Names[0]
+				}
 			}
 			switch typ.(type) {
 			case *ast.InterfaceType, *ast.StructType:
@@ -168,12 +180,14 @@ func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte)
 			}
 		case *ast.InterfaceType:
 			for i := 0; i < len(node.Methods.List); i++ {
-				addDoc(node.Methods.List[i], node.Methods.List[i].Type)
+				item := node.Methods.List[i]
+				addDoc(item, item.Names[0], item.Type)
 			}
 			return visitor
 		case *ast.StructType:
 			for i := 0; i < len(node.Fields.List); i++ {
-				addDoc(node.Fields.List[i], node.Fields.List[i].Type)
+				item := node.Fields.List[i]
+				addDoc(item, item.Names[0], item.Type)
 			}
 			return visitor
 		case *ast.TypeSpec:
@@ -182,17 +196,21 @@ func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte)
 				return visitor
 			}
 			typ = node.Type
+			name = node.Name
 		case *ast.ValueSpec:
 			if skipNextSpec {
 				skipNextSpec = false
 				return visitor
 			}
 			typ = node.Type
+			if len(node.Names) > 0 {
+				name = node.Names[0]
+			}
 		default:
 			return visitor
 		}
 
-		addDoc(node, typ)
+		addDoc(node, name, typ)
 		return visitor
 	})
 	ast.Walk(visitor, file)
