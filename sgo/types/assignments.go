@@ -220,7 +220,7 @@ func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Po
 	rhsIsEntangled := false
 	if rhs.EntangledPos == -1 {
 		var x operand
-		check.expr(&x, rhs.List[0])
+		check.rhsExpr(&x, rhs.List[0])
 		if t, ok := x.typ.(*Tuple); ok {
 			if t.entangled != nil {
 				// a, b \ c := f()
@@ -255,12 +255,18 @@ func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Po
 		check.error(lhs[0].Pos(), "expected entangled assignment, but left-hand side is not entangled")
 	}
 
+	allowCommaOk := l == 2 && entangledLhs != nil && !returnPos.IsValid()
+
 	get, r, commaOk := unpack(func(x *operand, i int) {
-		check.expr(x, rhs.List[i])
+		if allowCommaOk {
+			check.rhsExpr(x, rhs.List[i])
+		} else {
+			check.expr(x, rhs.List[i])
+		}
 		if isBoolean(x.typ) && (!isBooleanConst(*x) || constant.BoolVal(x.val) != false) {
 			check.error(rhs.List[i].Pos(), "entangled bool must be the false constant")
 		}
-	}, len(rhs.List), l == 2 && entangledLhs != nil && !returnPos.IsValid())
+	}, len(rhs.List), allowCommaOk)
 	if !commaOk && (!rhsIsEntangled && entangledLhs != nil) {
 		check.error(rhs.List[0].Pos(), "expected entangled assignment, but right-hand side is not entangled")
 	}
@@ -312,7 +318,7 @@ func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Po
 
 func (check *Checker) assignVars(lhs, rhs []ast.Expr) {
 	l := len(lhs)
-	get, r, commaOk := unpack(func(x *operand, i int) { check.expr(x, rhs[i]) }, len(rhs), l == 2)
+	get, r, commaOk := unpack(func(x *operand, i int) { check.rhsExpr(x, rhs[i]) }, len(rhs), l == 2)
 	if get == nil {
 		return // error reported by unpack
 	}

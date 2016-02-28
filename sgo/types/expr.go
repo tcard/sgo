@@ -1463,6 +1463,31 @@ func (check *Checker) expr(x *operand, e ast.Expr) {
 		msg = "must be called"
 	case typexpr:
 		msg = "is not an expression"
+	case mapindex, commaok:
+		if !isOptionable(x.typ) {
+			return
+		}
+		msg = "cannot be used as value directly; requires entangled assignment"
+	}
+	check.errorf(x.pos(), "%s %s", x, msg)
+	x.mode = invalid
+}
+
+// rhsExpr checks an expression on the right-hand side of an assignment. Like
+// (*Checker).expr, but doesn't fail on comma-OK-able expressions.
+//
+func (check *Checker) rhsExpr(x *operand, e ast.Expr) {
+	check.rawExpr(x, e, nil)
+	var msg string
+	switch x.mode {
+	default:
+		return
+	case novalue:
+		msg = "used as value"
+	case builtin:
+		msg = "must be called"
+	case typexpr:
+		msg = "is not an expression"
 	}
 	check.errorf(x.pos(), "%s %s", x, msg)
 	x.mode = invalid
@@ -1485,6 +1510,11 @@ func (check *Checker) exprWithHint(x *operand, e ast.Expr, hint Type) {
 		msg = "must be called"
 	case typexpr:
 		msg = "is not an expression"
+	case mapindex, commaok:
+		if !isOptionable(x.typ) {
+			return
+		}
+		msg = "cannot be used as value directly; requires entangled assignment"
 	}
 	check.errorf(x.pos(), "%s %s", x, msg)
 	x.mode = invalid
