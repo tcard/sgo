@@ -243,11 +243,42 @@ func IndexOf(needle int, haystack []int) (index int \ ok bool) {
 
 Of course, you can still use the old `. However, this way SGo forces you to get the logic right. For example, you aren't allowed to `return \ true`; and you aren't allowed to use the entangled return values until the associated boolean return value is proven to be true.
 
+### Comma-OK assignments
+
+In Go, when performing some operations (receiving from a channel, type-asserting, reading from a map), you can additionally get a second boolean return value that tells you whether the operation succeeded.
+
+```go
+// Go code; not SGo.
+m = map[int]string{456: "foo"}
+v, ok := m[123] // v is "", ok is false
+v, ok = m[456]  // v is "foo", ok is true
+
+m = m = map[int]interface{}{456: nil, 789: "qux"}
+v, ok = m[123]  // v is nil, ok is false
+v, ok = m[456]  // v is nil, ok is true
+v, ok = m[789]  // v is "qux", ok is true
+```
+
+In SGo, such operations return an [entangled bool](#entangled-bools) instead.
+
+[Try in browser!](http://fanyare.tcardenas.me:5600/?gist=4bba5cbc11125b4147dd)
+
+```go
+m = map[int]string{456: "foo"}
+v \ ok := m[123] // v is "", ok is false
+// fmt.Println(v) doesn't compile; ok might be false.
+if ok {
+	fmt.Println(v)
+}
+```
+
+In fact, when the first return type from such operations (receiving from a channel, type-asserting, reading from a map) is a pointer, map, interface, channel, or function, SGo will forbid you to perform it without expecting a second "OK" value. This is because those types [don't have a zero value in SGo](#zero-values-of-pointers-maps-functions-channels-and-interfaces), so you need to make sure the operation succeeds.
+
 ## Representation in Go code
 
-Optionals introduce absolutely no runtime costs. You can translate from SGo to Go in your head just by removing the `?`s and the `\`s. When in SGo you assign `nil` to an optional variable, in Go you assign `nil` to a variable of the wrapped type. The only difference is that the resulting Go code is proven to be safe to execute (as in "won't crash due to nil") by the SGo compiler.
+Optionals and entanglement introduce absolutely no runtime costs. You can translate from SGo to Go in your head just by removing the `?`s and the `\`s. When in SGo you assign `nil` to an optional variable, in Go you assign `nil` to a variable of the wrapped type. The only difference is that the resulting Go code is proven to be safe to execute (as in "won't crash due to nil") by the SGo compiler.
 
-This is why only pointers, maps, interfaces, channels and functions can be wrapped in optionals. Those are the types which in Go can be `nil`. (Slices are excluded from this protection, since a nil slice is exactly as safe as a slice with zero elements. You can and should still use nil slices.) SGo keeps Go's feature that memory representation is totally obvious at all points, and doesn't introduce new, unfamiliar memory layouts such as tagged unions. Although it can be handy to have `?string`, or `?int`, that would defeat this purpose. You can either continue to use `""` and `0` or `-1` as nothingness for those types, as you usually do in Go, or wrap them in a pointer in the middle (`?*string`, `?*int`).
+This is why only pointers, maps, interfaces, channels and functions can be wrapped in optionals. Those are the types which in Go can be `nil`. (Slices are excluded from this protection, since a nil slice is exactly as safe as a slice with zero elements. You can and should still use nil slices.) SGo keeps Go's feature that memory representation is totally obvious at all points, and doesn't introduce new, unfamiliar memory layouts such as tagged unions. Although it can be handy to have `?string`, or `?int`, that would defeat this purpose. You can either continue to use `""` and `0` or `-1` as nothingness for those types, or use [an entangled bool](#entangled-bools), as you usually do in Go, or wrap them in a pointer in the middle (`?*string`, `?*int`).
 
 ## Zero values of pointers, maps, functions, channels, and interfaces
 
