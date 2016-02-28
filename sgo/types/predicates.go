@@ -76,6 +76,15 @@ func isOptional(typ Type) bool {
 	return ok
 }
 
+func isOptionable(typ Type) bool {
+	return IsInterface(typ) || isMap(typ) || isPointer(typ) || isSignature(typ) || isChan(typ)
+}
+
+func isChan(typ Type) bool {
+	_, ok := typ.Underlying().(*Chan)
+	return ok
+}
+
 // IsInterface reports whether typ is an interface type.
 func IsInterface(typ Type) bool {
 	_, ok := typ.Underlying().(*Interface)

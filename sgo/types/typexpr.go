@@ -280,6 +280,9 @@ func (check *Checker) typExprInternal(e ast.Expr, def *Named, path []*TypeName) 
 		typ := new(Optional)
 		def.setUnderlying(typ)
 		typ.elem = check.typ(e.Elt)
+		if !isOptionable(typ.elem) {
+			check.error(e.Pos(), "optional must wrap pointer, map, channel, interface or function type")
+		}
 		return typ
 
 	case *ast.StructType:
