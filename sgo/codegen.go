@@ -691,7 +691,11 @@ func (c *converter) convertReturnStmt(v *ast.ReturnStmt) *goast.ReturnStmt {
 		ret.Results = append(ret.Results, c.convertExpr(v))
 	}
 	if v.Results.EntangledPos > 0 {
-		ret.Results = append(ret.Results, c.injectedIdent("nil", c.convertPos(v.Results.End())))
+		id := "nil"
+		if c.lastFunc.Results().Entangled().Type() == types.Typ[types.Bool] {
+			id = "true"
+		}
+		ret.Results = append(ret.Results, c.injectedIdent(id, c.convertPos(v.Results.End())))
 	}
 	return ret
 }

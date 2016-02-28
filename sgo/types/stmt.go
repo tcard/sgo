@@ -387,17 +387,17 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			check.error(s.Cond.Pos(), "non-boolean condition in if statement")
 		}
 
-		opts := check.unwrappedOptionals(x)
+		effs := check.ifCondSideEffects(x)
 		var collapsed []*Var
 
-		handleOpts := func(inElse bool) {
-			for _, opt := range opts {
-				if (!inElse && opt.isNil) || (inElse && !opt.isNil) {
+		handleEffs := func(inElse bool) {
+			for _, eff := range effs {
+				if (!inElse && eff.isNilOrTrue) || (inElse && !eff.isNilOrTrue) {
 					sc := check.scope
 					if inElse {
 						sc = sc.Parent()
 					}
-					_, v := sc.LookupParent(opt.ident.Name, token.NoPos)
+					_, v := sc.LookupParent(eff.ident.Name, token.NoPos)
 					if v, ok := v.(*Var); ok {
 						for _, c := range v.collapses {
 							if !c.usable {
@@ -410,7 +410,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 						}
 					}
 				} else {
-					newVar := NewVar(-1, check.pkg, opt.ident.Name, opt.typ)
+					newVar := NewVar(-1, check.pkg, eff.ident.Name, eff.typ)
 					newVar.usable = true
 					if debugUsable {
 						fmt.Println("USABLE if-else unwrapped var:", fmt.Sprintf("(inElse: %v)", inElse), newVar.name, fmt.Sprintf("%p", newVar), newVar.usable)
@@ -433,8 +433,8 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			sc = sc.Parent()
 		}
 
-		if len(opts) > 0 {
-			handleOpts(false)
+		if len(effs) > 0 {
+			handleEffs(false)
 		}
 
 		check.stmt(inner, s.Body)
@@ -459,8 +459,8 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 
 		if s.Else != nil {
 			collapsed = nil
-			if len(opts) > 0 {
-				handleOpts(true)
+			if len(effs) > 0 {
+				handleEffs(true)
 			}
 
 			check.stmt(inner, s.Else)
@@ -839,39 +839,81 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 	}
 }
 
-type unpackedOptional struct {
-	ident *ast.Ident
-	typ   Type
-	isNil bool
+type ifCondSideEffect struct {
+	ident       *ast.Ident
+	typ         Type
+	isNilOrTrue bool
 }
 
 // unwrappedOptionals looks up in a boolean expression all the variables of
-// optional type such that the expression can only be true iff they are nil xor
-// non-nil and returns their necessary value together with their idents.
-func (checker *Checker) unwrappedOptionals(x operand) []unpackedOptional {
-	// TODO: Cover more cases
-	var opts []unpackedOptional
+// optional or bool type such that the expression can only be true iff they are
+// nil xor for non-nil optionals, or true xor false for bools, and returns
+// their necessary value together with their idents.
+func (checker *Checker) ifCondSideEffects(x operand) []ifCondSideEffect {
+	// TODO: Cover more cases.
+	var effs []ifCondSideEffect
 	switch v := x.expr.(type) {
-	case *ast.BinaryExpr:
-		var opt unpackedOptional
-		if v.Op == token.EQL || v.Op == token.NEQ {
-			opt.isNil = v.Op == token.EQL
-		} else {
-			return opts
+	case *ast.Ident:
+		var op operand
+		checker.expr(&op, v)
+		if isBoolean(op.typ) {
+			effs = append(effs, ifCondSideEffect{
+				ident:       v,
+				typ:         op.typ.Underlying(),
+				isNilOrTrue: true,
+			})
 		}
+	case *ast.BinaryExpr:
+		if v.Op != token.EQL && v.Op != token.NEQ {
+			return effs
+		}
+
+		var eff ifCondSideEffect
 		var xOp, yOp operand
 		checker.expr(&xOp, v.X)
 		checker.expr(&yOp, v.Y)
-		if id, ok := v.X.(*ast.Ident); ok && isOptional(xOp.typ) && yOp.isNil() {
-			opt.ident = id
-			opt.typ = xOp.typ.Underlying().(*Optional).elem
-		} else if id, ok := v.Y.(*ast.Ident); ok && isOptional(yOp.typ) && xOp.isNil() {
-			opt.ident = id
-			opt.typ = yOp.typ.Underlying().(*Optional).elem
-		} else {
-			return opts
+
+		xId, ok := v.X.(*ast.Ident)
+		if !ok {
+			return effs
 		}
-		opts = append(opts, opt)
+		yId, ok := v.Y.(*ast.Ident)
+		if !ok {
+			return effs
+		}
+
+		isReversedOptionalUnwrap := isOptional(yOp.typ) && xOp.isNil()
+		isReversedBoolCollapse := isBooleanConst(xOp) && checker.isCollapserVar(yId)
+
+		if isReversedOptionalUnwrap || isReversedBoolCollapse {
+			xOp, yOp, xId, yId = yOp, xOp, yId, xId
+		}
+
+		if isReversedOptionalUnwrap || (isOptional(xOp.typ) && yOp.isNil()) {
+			eff.ident = xId
+			eff.typ = xOp.typ.Underlying().(*Optional).elem
+			eff.isNilOrTrue = v.Op == token.EQL
+		} else if isReversedBoolCollapse || (isBooleanConst(yOp) && checker.isCollapserVar(xId)) {
+			eff.ident = xId
+			eff.typ = xOp.typ.Underlying()
+			eff.isNilOrTrue = constant.BoolVal(yOp.val) == true
+		} else {
+			return effs
+		}
+
+		effs = append(effs, eff)
 	}
-	return opts
+	return effs
+}
+
+func (c *Checker) isCollapserVar(id *ast.Ident) bool {
+	_, v := c.scope.LookupParent(id.Name, token.NoPos)
+	if v, ok := v.(*Var); ok {
+		return len(v.collapses) > 0
+	}
+	return false
+}
+
+func isBooleanConst(o operand) bool {
+	return isBoolean(o.typ) && o.mode == constant_
 }

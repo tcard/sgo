@@ -49,6 +49,7 @@ _ = m["needle"]            // ... would cause a panic if used before initialized
 - [The billion dollar mistake](#the-billion-dollar-mistake)
 - [Optional types](#optional-types)
 - [Entangled optionals](#entangled-optionals)
+  - [Entangled bools](#entangled-bools)
 - [Representation in Go code](#representation-in-go-code)
 - [Zero values of pointers, maps, functions, channels, and interfaces](#zero-values-of-pointers-maps-functions-channels-and-interfaces)
 - [Type assertions](#type-assertions)
@@ -215,6 +216,23 @@ func Divide(dividend, divisor int64) (quotient int64, remainder int64 \ err erro
 	return
 }
 ```
+
+### Entangled bools
+
+The same idiom works for booleans, too. It's typical to use an "ok" boolean last return value to indicate whether the other return values are valid or not.
+
+```go
+func IndexOf(needle int, haystack []int) (index int \ ok bool) {
+	for i, v := range haystack {
+		if v == needle {
+			return i \
+		}
+	}
+	return \ false
+}
+```
+
+Of course, you can still use the old `. However, this way SGo forces you to get the logic right. For example, you aren't allowed to `return \ true`; and you aren't allowed to use the entangled return values until the associated boolean return value is proven to be true.
 
 ## Representation in Go code
 

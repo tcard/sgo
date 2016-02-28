@@ -426,7 +426,16 @@ func (check *Checker) collectParams(scope *Scope, list *ast.FieldList, variadicO
 		}
 		typ := check.typ(ftype)
 		if isEntangled {
-			typ = NewOptional(typ)
+			switch underlying(typ).(type) {
+			case *Interface, *Map, *Chan, *Signature, *Pointer:
+				typ = NewOptional(typ)
+			default:
+				if typ == Typ[Bool] {
+					break
+				}
+				check.error(field.Pos(), "entangled type must be interface, map, channel, function, pointer or bool")
+			}
+
 		}
 		// The parser ensures that f.Tag is nil and we don't
 		// care if a constructed AST contains a non-nil tag.

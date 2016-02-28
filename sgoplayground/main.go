@@ -39,7 +39,7 @@ func main() {
 					defer func() {
 						if r := recover(); r != nil {
 							value := fmt.Sprintln(r)
-							stack := make([]byte, 1000)
+							stack := make([]byte, 99999)
 							runtime.Stack(stack, false)
 							value += string(stack)
 							resp.Value = value

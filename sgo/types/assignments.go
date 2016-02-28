@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/tcard/sgo/sgo/ast"
+	"github.com/tcard/sgo/sgo/constant"
 	"github.com/tcard/sgo/sgo/token"
 )
 
@@ -252,11 +253,12 @@ func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Po
 		check.error(lhs[0].Pos(), "expected entangled assignment, but left-hand side is not entangled")
 	}
 
-	// if rhsEntangled == entangledRight {
-	// 	l = 1
-	// }
-
-	get, r, commaOk := unpack(func(x *operand, i int) { check.expr(x, rhs.List[i]) }, len(rhs.List), l == 2 && entangledLhs == nil && !returnPos.IsValid())
+	get, r, commaOk := unpack(func(x *operand, i int) {
+		check.expr(x, rhs.List[i])
+		if isBoolean(x.typ) && (!isBooleanConst(*x) || constant.BoolVal(x.val) != false) {
+			check.error(rhs.List[i].Pos(), "entangled bool must be the false constant")
+		}
+	}, len(rhs.List), l == 2 && entangledLhs == nil && !returnPos.IsValid())
 	if get == nil || l != r {
 		// invalidate lhs and use rhs
 		for _, obj := range lhs {
