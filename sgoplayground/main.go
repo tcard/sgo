@@ -261,27 +261,29 @@ window.addEventListener("load", function(evt) {
 					var ev = evs[i];
 					accDelay += ev.Delay;
 					setTimeout(function() {
-						executed.innerHTML += ev.Message;
+						executed.textContent += ev.Message;
 						if (i == evs.length - 1) {
-							runButton.innerHTML = "Run";
+							runButton.textContent = "Run";
 							runButton.disabled = false;
 						}
 					}, accDelay);
 				})(i);
 				}
 			} else if (data.value.Errors) {
-				executed.innerHTML = data.value.Errors;
-				runButton.innerHTML = "Run";
+				executed.textContent = data.value.Errors;
+				runButton.textContent = "Run";
 				runButton.disabled = false;
 			} else {
-				runButton.innerHTML = "Run";
+				runButton.textContent = "Run";
 				runButton.disabled = false;
 			}
 		} else if (data.type == "translate") {
-			translated.innerHTML = data.value;
+			translated.textContent = data.value;
 		} else if (data.type == "format") {
-			inputCode.value = data.value;
-			formatButton.innerHTML = "Format";
+			if (data.value) {
+				inputCode.value = data.value;
+			}
+			formatButton.textContent = "Format";
 			formatButton.disabled = false;
 		}
 	};
@@ -292,9 +294,9 @@ window.addEventListener("load", function(evt) {
 			"type": "execute",
 			"value": inputCode.value,
 		}));
-		runButton.innerHTML = "Running...";
+		runButton.textContent = "Running...";
 		runButton.disabled = true;
-		executed.innerHTML = "";
+		executed.textContent = "";
 	};
 
 	formatButton.onclick = function(ev) {
@@ -303,7 +305,7 @@ window.addEventListener("load", function(evt) {
 			"type": "format",
 			"value": inputCode.value,
 		}));
-		formatButton.innerHTML = "Formatting...";
+		formatButton.textContent = "Formatting...";
 		formatButton.disabled = true;
 	};
 
@@ -319,7 +321,7 @@ window.addEventListener("load", function(evt) {
 	ws.onopen = function() {
 		var gist = "{{.Gist}}";
 		if (gist) {
-			runButton.innerHTML = "Loading Gist...";
+			runButton.textContent = "Loading Gist...";
 			runButton.disabled = true;
 			ajax("https://api.github.com/gists/" + gist, {
 				success: function(req) {
@@ -328,7 +330,7 @@ window.addEventListener("load", function(evt) {
 						ajax(files[i].raw_url, {success: function(req) {
 							inputCode.value = req.responseText;
 							translate();
-							runButton.innerHTML = "Run";
+							runButton.textContent = "Run";
 							runButton.disabled = false;
 						}});
 						break;
@@ -336,7 +338,7 @@ window.addEventListener("load", function(evt) {
 				},
 				fail: function(req) {
 					alert("Bad Gist URL!");
-					runButton.innerHTML = "Run";
+					runButton.textContent = "Run";
 					runButton.disabled = false;
 				},
 			});
@@ -361,11 +363,11 @@ window.addEventListener("load", function(evt) {
 				shareInput.value = window.location.origin + window.location.pathname + '?gist=' + id;
 				shareInput.style.display = 'inline';
 				shareInput.focus();
-				shareButton.innerHTML = "Share";
+				shareButton.textContent = "Share";
 				shareButton.disabled = false;
 			},
 		});
-		shareButton.innerHTML = "Sharing...";
+		shareButton.textContent = "Sharing...";
 		shareButton.disabled = true;
 	};
 

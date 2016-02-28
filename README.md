@@ -12,7 +12,9 @@ It introduces this:
 type Response struct {
 	Body ?io.ReadCloser
 }
+
 // response.Body.Close() doesn't compile; Body might be nil.
+
 if body := response.Body; body != nil {
 	body.Close()
 }
@@ -21,9 +23,12 @@ if body := response.Body; body != nil {
 And this:
 ```go
 func Get(r *http.Request) (*Response \ error) { ... }
+
 response \ err := Get(r)
+
 // body := response.Body doesn't compile; can't use response until we know
 // that err is nil.
+
 if err != nil {
 	return err
 }
@@ -205,6 +210,8 @@ func Get(url string) (*Response \ error) {
 
 You can entangle any number of variables with an optional, not just one.
 
+[Try in browser!](http://fanyare.tcardenas.me:5600/?gist=a2badeb53ff0c912b687)
+
 ```go
 func Divide(dividend, divisor int64) (quotient int64, remainder int64 \ err error) {
 	if divisor == 0 {
@@ -220,6 +227,8 @@ func Divide(dividend, divisor int64) (quotient int64, remainder int64 \ err erro
 ### Entangled bools
 
 The same idiom works for booleans, too. It's typical to use an "ok" boolean last return value to indicate whether the other return values are valid or not.
+
+[Try in browser!](http://fanyare.tcardenas.me:5600/?gist=a9fc8e5011fc429e0068)
 
 ```go
 func IndexOf(needle int, haystack []int) (index int \ ok bool) {
@@ -262,6 +271,8 @@ SGo compiles to Go, and all information about optional types gets lost in transl
 
 Because of this, SGo forbids type-asserting directly to pointers, functions, maps, channels, or interfaces.
 
+[Try in browser!](http://fanyare.tcardenas.me:5600/?gist=495cd471e1a2dd6688fc)
+
 ```go
 var m = map[string]int{"foo": 123}
 var x interface{} = m
@@ -301,12 +312,17 @@ var x interface{} = m
 
 Because, at runtime, SGo programs are just Go, and thus know nothing of optionals, reflection will ignore them altogether, and just use their underlying Go representation.
 
+[Try in browser!](http://fanyare.tcardenas.me:5600/?gist=9d5b79f181b4cbc49c41)
+
 ```go
-var x ?error
-fmt.Printf("%T\n", x) // Prints 'error', not '?error'.
+var x ?*int
+fmt.Printf("%T\n", x) // Prints '*int', not '?*int'.
 ```
 
+
 Unfortunately, this means that you can use reflection to bypass SGo's guarantees.
+
+[Try in browser!](http://fanyare.tcardenas.me:5600/?gist=d634243dff16915d3013)
 
 ```go
 type Point struct{ X, Y int }
