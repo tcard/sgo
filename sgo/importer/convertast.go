@@ -6,6 +6,7 @@ import (
 
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/parser"
+	"github.com/tcard/sgo/sgo/types"
 )
 
 // ConvertAST transforms an imported Go AST applying type annotations found in
@@ -19,85 +20,113 @@ import (
 // is a hack that takes advantage of the fact that every Go AST is also a valid
 // SGo AST; this way, we don't have to convert from Go to SGo types, which is
 // a pain.
-func ConvertAST(a *ast.File) {
-	convertAST(a, nil)
+func ConvertAST(a *ast.File, info *types.Info) {
+	c := astConverter{info: info}
+	c.convertAST(a, nil)
 }
 
-func convertAST(node ast.Node, replace func(e ast.Expr)) {
-	maybeReplace(node, replace)
+type astConverter struct {
+	info      *types.Info
+	converted map[interface{}]struct{}
+}
+
+func (c *astConverter) convertAST(node ast.Node, replace func(e ast.Expr)) {
+	if replaced := c.maybeReplace(node, replace); replaced {
+		return
+	}
 
 	switch n := node.(type) {
 	case *ast.Field:
-		convertAST(n.Type, nil)
+		c.convertAST(n.Type, func(e ast.Expr) { n.Type = e })
 
 	case *ast.FieldList:
 		for _, f := range n.List {
-			convertAST(f, func(e ast.Expr) { f.Type = e })
+			c.convertAST(f, func(e ast.Expr) { f.Type = e })
 		}
 
 	case *ast.StarExpr:
-		convertAST(n.X, nil)
+		replace(&ast.OptionalType{Elt: n})
+		c.convertAST(n.X, func(e ast.Expr) { n.X = e })
+
+	case *ast.Ident:
+		u, ok := c.info.Uses[n]
+		if !ok {
+			break
+		}
+		tn, ok := u.(*types.TypeName)
+		if !ok {
+			break
+		}
+		if types.IsInterface(tn.Type()) {
+			replace(&ast.OptionalType{Elt: n})
+		}
 
 	// Types
 	case *ast.ArrayType:
-		convertAST(n.Elt, nil)
+		c.convertAST(n.Elt, nil)
 
 	case *ast.StructType:
-		convertAST(n.Fields, nil)
+		c.convertAST(n.Fields, nil)
 
 	case *ast.FuncType:
+		if replace != nil {
+			replace(&ast.OptionalType{Elt: n})
+		}
 		if n.Params != nil {
-			convertAST(n.Params, nil)
+			c.convertAST(n.Params, nil)
 		}
 		if n.Results != nil {
-			convertAST(n.Results, nil)
+			c.convertAST(n.Results, nil)
 		}
 
 	case *ast.InterfaceType:
-		convertAST(n.Methods, nil)
+		replace(&ast.OptionalType{Elt: n})
+		c.convertAST(n.Methods, nil)
 
 	case *ast.MapType:
-		convertAST(n.Key, nil)
-		convertAST(n.Value, nil)
+		replace(&ast.OptionalType{Elt: n})
+		c.convertAST(n.Key, func(e ast.Expr) { n.Key = e })
+		c.convertAST(n.Value, func(e ast.Expr) { n.Value = e })
 
 	case *ast.ChanType:
-		convertAST(n.Value, nil)
+		replace(&ast.OptionalType{Elt: n})
+		c.convertAST(n.Value, func(e ast.Expr) { n.Value = e })
 
 	// Declarations
 	case *ast.ValueSpec:
 		if n.Type != nil {
-			convertAST(n.Type, nil)
+			c.convertAST(n.Type, nil)
 		}
 
 	case *ast.TypeSpec:
-		convertAST(n.Type, nil)
+		c.convertAST(n.Type, nil)
 
 	case *ast.GenDecl:
 		for _, s := range n.Specs {
 			switch s := s.(type) {
 			case *ast.ImportSpec:
-				convertAST(s, nil)
+				c.convertAST(s, nil)
 			case *ast.ValueSpec:
-				convertAST(s, func(e ast.Expr) { s.Type = e })
+				c.convertAST(s, func(e ast.Expr) { s.Type = e })
 			case *ast.TypeSpec:
-				convertAST(s, func(e ast.Expr) { s.Type = e })
-
+				c.convertAST(s, func(e ast.Expr) { s.Type = e })
 			}
 		}
 
 	case *ast.FuncDecl:
-		if n.Recv != nil {
-			convertAST(n.Recv, nil)
-		}
-		convertAST(n.Type, nil)
+		// https://github.com/tcard/sgo/issues/13
+		// if n.Recv != nil {
+		// 	c.convertAST(n.Recv, nil)
+		// }
+		c.convertAST(n.Type, nil)
 
 	case *ast.File:
 		for _, d := range n.Decls {
 			switch d := d.(type) {
 			case *ast.GenDecl:
-				convertAST(d, nil)
+				c.convertAST(d, nil)
 			case *ast.FuncDecl:
-				convertAST(d, func(e ast.Expr) {
+				c.convertAST(d, func(e ast.Expr) {
 					if e, ok := e.(*ast.FuncType); ok {
 						d.Type = e
 					}
@@ -107,21 +136,25 @@ func convertAST(node ast.Node, replace func(e ast.Expr)) {
 	}
 }
 
-func maybeReplace(node ast.Node, replace func(e ast.Expr)) {
+func (c *astConverter) maybeReplace(node ast.Node, replace func(e ast.Expr)) bool {
+	if replace == nil {
+		return false
+	}
+
 	n := reflect.ValueOf(node)
 
 	if n.Elem().Type().Kind() != reflect.Struct {
-		return
+		return false
 	}
 
 	doc := n.Elem().FieldByName("Doc")
 	if !doc.IsValid() {
-		return
+		return false
 	}
 
 	cg := doc.Interface().(*ast.CommentGroup)
 	if cg == nil {
-		return
+		return false
 	}
 
 	for _, l := range cg.List {
@@ -137,10 +170,12 @@ func maybeReplace(node ast.Node, replace func(e ast.Expr)) {
 		ann := s[len("For SGo: "):]
 		e, err := parser.ParseExpr(ann)
 		if err != nil {
-			return
+			return false
 		}
 
 		replace(e)
-		break
+		return true
 	}
+
+	return false
 }

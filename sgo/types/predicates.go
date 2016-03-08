@@ -76,7 +76,9 @@ func isOptional(typ Type) bool {
 	return ok
 }
 
-func isOptionable(typ Type) bool {
+// IsOptionable reports whether typ is a type that may be found wrapped in an
+// optional: an interface, map, pointer, function or channel type.
+func IsOptionable(typ Type) bool {
 	return IsInterface(typ) || isMap(typ) || isPointer(typ) || isSignature(typ) || isChan(typ)
 }
 
