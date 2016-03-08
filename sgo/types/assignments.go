@@ -215,10 +215,10 @@ func (check *Checker) assignVar(lhs ast.Expr, x *operand) Type {
 // If returnPos is valid, initVars is called to type-check the assignment of
 // return expressions, and returnPos is the position of the return statement.
 func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Pos, entangledLhs *Var) {
-	var l int
+	l := len(lhs)
 
 	rhsIsEntangled := false
-	if rhs.EntangledPos == -1 {
+	if rhs.EntangledPos == -1 && len(rhs.List) > 0 {
 		var x operand
 		check.rhsExpr(&x, rhs.List[0])
 		if t, ok := x.typ.(*Tuple); ok {
@@ -246,7 +246,7 @@ func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Po
 		// a, b \ c := x, y \
 		rhsIsEntangled = true
 		l = len(lhs)
-	} else {
+	} else if len(rhs.List) > 0 {
 		rhsIsEntangled = true
 		check.error(rhs.List[0].Pos(), "must have values at either side of \\, not both")
 	}

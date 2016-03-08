@@ -454,10 +454,10 @@ func (check *Checker) collectParams(scope *Scope, list *ast.FieldList, variadicO
 					// ok to continue
 				}
 				par := NewParam(name.Pos(), check.pkg, name.Name, typ)
-				check.declare(scope, name, par, scope.pos)
 				if isEntangled {
 					entangled = par
 				} else {
+					check.declare(scope, name, par, scope.pos)
 					params = append(params, par)
 				}
 			}
