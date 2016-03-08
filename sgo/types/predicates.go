@@ -331,3 +331,30 @@ func defaultType(typ Type) Type {
 	}
 	return typ
 }
+
+func hasZeroValue(typ Type) (has bool, paths [][]string) {
+	has = hasZeroValue2(typ, nil, func(namestack []string) {
+		paths = append(paths, namestack)
+	})
+	return has, paths
+}
+
+func hasZeroValue2(typ Type, namestack []string, found func([]string)) bool {
+	if IsOptionable(typ) {
+		found(namestack)
+		return false
+	}
+	has := true
+	switch t := typ.Underlying().(type) {
+	case *Struct:
+		for i := 0; i < t.NumFields(); i++ {
+			f := t.Field(i)
+			if !hasZeroValue2(f.Type(), append(namestack, f.Name()), found) {
+				has = false
+			}
+		}
+	case *Array:
+		has = hasZeroValue2(t.Elem(), append(namestack, "(array elements)"), found)
+	}
+	return has
+}

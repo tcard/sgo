@@ -151,6 +151,9 @@ func (check *Checker) varDecl(obj *Var, lhs []*Var, typ, init ast.Expr) {
 			// error reported before by arityMatch
 			obj.typ = Typ[Invalid]
 		}
+		if has, paths := hasZeroValue(obj.typ); !has {
+			check.errorHasZeroValuePaths(obj.pos, paths)
+		}
 		return
 	} else {
 		obj.usable = true

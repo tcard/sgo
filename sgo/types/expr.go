@@ -1010,6 +1010,12 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 			if typ == nil {
 				typ = check.typ(e.Type)
 			}
+
+			if atyp, _ := typ.Underlying().(*Array); atyp != nil && atyp.len > -1 && int64(len(e.Elts)) != atyp.len {
+				if has, paths := hasZeroValue(atyp); !has {
+					check.errorHasZeroValuePaths(e.End(), paths)
+				}
+			}
 		}
 		if typ == nil {
 			// TODO(gri) provide better error messages depending on context
@@ -1020,6 +1026,9 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 		switch typ, _ := deref(typ); utyp := typ.Underlying().(type) {
 		case *Struct:
 			if len(e.Elts) == 0 {
+				if has, paths := hasZeroValue(typ); !has {
+					check.errorHasZeroValuePaths(e.Rbrace, paths)
+				}
 				break
 			}
 			fields := utyp.fields
@@ -1057,6 +1066,14 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 							check.errorf(x.pos(), "cannot use %s as %s value in struct literal", x, etyp)
 						}
 						continue
+					}
+				}
+				for _, v := range visited {
+					if !v {
+						if has, paths := hasZeroValue(typ); !has {
+							check.errorHasZeroValuePaths(e.Rbrace, paths)
+						}
+						break
 					}
 				}
 			} else {
