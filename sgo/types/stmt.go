@@ -392,38 +392,6 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		}
 
 		effs := check.ifCondSideEffects(x)
-		var collapsed []*Var
-
-		handleEffs := func(inElse bool) {
-			for _, eff := range effs {
-				if (!inElse && eff.isNilOrTrue) || (inElse && !eff.isNilOrTrue) {
-					sc := check.scope
-					if inElse {
-						sc = sc.Parent()
-					}
-					_, v := sc.LookupParent(eff.ident.Name, token.NoPos)
-					if v, ok := v.(*Var); ok {
-						for _, c := range v.collapses {
-							if !c.usable {
-								c.usable = true
-								if debugUsable {
-									fmt.Println("USABLE if-else unwrapped collapses:", fmt.Sprintf("(inElse: %v)", inElse), c.name, fmt.Sprintf("%p", c), c.usable)
-								}
-								collapsed = append(collapsed, c)
-							}
-						}
-					}
-				} else {
-					newVar := NewVar(-1, check.pkg, eff.ident.Name, eff.typ)
-					newVar.usable = true
-					if debugUsable {
-						fmt.Println("USABLE if-else unwrapped var:", fmt.Sprintf("(inElse: %v)", inElse), newVar.name, fmt.Sprintf("%p", newVar), newVar.usable)
-					}
-					newVar.used = true
-					check.scope.Insert(newVar)
-				}
-			}
-		}
 
 		wereUsable := map[*Var]bool{}
 		sc := check.scope.Parent()
@@ -437,9 +405,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			sc = sc.Parent()
 		}
 
-		if len(effs) > 0 {
-			handleEffs(false)
-		}
+		collapsed := check.handleEffs(effs, false)
 
 		check.stmt(inner, s.Body)
 
@@ -462,10 +428,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		}
 
 		if s.Else != nil {
-			collapsed = nil
-			if len(effs) > 0 {
-				handleEffs(true)
-			}
+			collapsed = check.handleEffs(effs, true)
 
 			check.stmt(inner, s.Else)
 
@@ -473,7 +436,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				if !(v.usable && usableAfterBody[v]) {
 					v.usable = wasUsable
 					if debugUsable {
-						fmt.Println("USABLE else restore usable after else:", v.name, fmt.Sprintf("%p", v), v.usable)
+						fmt.Println("USABLE else restore usable after body:", v.name, fmt.Sprintf("%p", v), v.usable)
 					}
 				}
 			}
@@ -483,6 +446,15 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				if debugUsable {
 					fmt.Println("USABLE if reset collapsed to false after body:", c.name, fmt.Sprintf("%p", c), c.usable)
 				}
+			}
+		}
+
+		if len(s.Body.List) > 0 {
+			if _, ok := s.Body.List[len(s.Body.List)-1].(*ast.ReturnStmt); ok {
+				if debugUsable {
+					fmt.Println("USABLE if.body returns, so simulate that rest of the statements are in else")
+				}
+				check.handleEffs(effs, true)
 			}
 		}
 
@@ -867,6 +839,23 @@ func (checker *Checker) ifCondSideEffects(x operand) []ifCondSideEffect {
 				isNilOrTrue: true,
 			})
 		}
+	case *ast.UnaryExpr:
+		if v.Op != token.NOT {
+			return effs
+		}
+		id, ok := v.X.(*ast.Ident)
+		if !ok {
+			return effs
+		}
+		var op operand
+		checker.expr(&op, id)
+		if isBoolean(op.typ) {
+			effs = append(effs, ifCondSideEffect{
+				ident:       id,
+				typ:         op.typ.Underlying(),
+				isNilOrTrue: false,
+			})
+		}
 	case *ast.BinaryExpr:
 		if v.Op != token.EQL && v.Op != token.NEQ {
 			return effs
@@ -908,6 +897,39 @@ func (checker *Checker) ifCondSideEffects(x operand) []ifCondSideEffect {
 		effs = append(effs, eff)
 	}
 	return effs
+}
+
+func (check *Checker) handleEffs(effs []ifCondSideEffect, inElse bool) []*Var {
+	var collapsed []*Var
+	for _, eff := range effs {
+		if (!inElse && eff.isNilOrTrue) || (inElse && !eff.isNilOrTrue) {
+			sc := check.scope
+			if inElse {
+				sc = sc.Parent()
+			}
+			_, v := sc.LookupParent(eff.ident.Name, token.NoPos)
+			if v, ok := v.(*Var); ok {
+				for _, c := range v.collapses {
+					if !c.usable {
+						c.usable = true
+						if debugUsable {
+							fmt.Println("USABLE if-else unwrapped collapses:", fmt.Sprintf("(inElse: %v)", inElse), c.name, fmt.Sprintf("%p", c), c.usable)
+						}
+						collapsed = append(collapsed, c)
+					}
+				}
+			}
+		} else {
+			newVar := NewVar(-1, check.pkg, eff.ident.Name, eff.typ)
+			newVar.usable = true
+			if debugUsable {
+				fmt.Println("USABLE if-else unwrapped var:", fmt.Sprintf("(inElse: %v)", inElse), newVar.name, fmt.Sprintf("%p", newVar), newVar.usable)
+			}
+			newVar.used = true
+			check.scope.Insert(newVar)
+		}
+	}
+	return collapsed
 }
 
 func (c *Checker) isCollapserVar(id *ast.Ident) bool {
