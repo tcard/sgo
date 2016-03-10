@@ -8,12 +8,12 @@ package format
 import (
 	"bytes"
 	"fmt"
+	"io"
+
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/parser"
 	"github.com/tcard/sgo/sgo/printer"
 	"github.com/tcard/sgo/sgo/token"
-	"github.com/tcard/sgo/sgo/internal/format"
-	"io"
 )
 
 var config = printer.Config{Mode: printer.UseSpaces | printer.TabIndent, Tabwidth: 8}
@@ -82,7 +82,7 @@ func Node(dst io.Writer, fset *token.FileSet, node interface{}) error {
 //
 func Source(src []byte) ([]byte, error) {
 	fset := token.NewFileSet()
-	file, sourceAdj, indentAdj, err := format.Parse(fset, "", src, true)
+	file, sourceAdj, indentAdj, err := parse(fset, "", src, true)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func Source(src []byte) ([]byte, error) {
 		ast.SortImports(fset, file)
 	}
 
-	return format.Format(fset, file, sourceAdj, indentAdj, src, config)
+	return format(fset, file, sourceAdj, indentAdj, src, config)
 }
 
 func hasUnsortedImports(file *ast.File) bool {

@@ -95,11 +95,11 @@ func (c *astConverter) convertAST(node ast.Node, replace func(e ast.Expr)) {
 	// Declarations
 	case *ast.ValueSpec:
 		if n.Type != nil {
-			c.convertAST(n.Type, nil)
+			c.convertAST(n.Type, func(e ast.Expr) { n.Type = e })
 		}
 
 	case *ast.TypeSpec:
-		c.convertAST(n.Type, nil)
+		c.convertAST(n.Type, func(e ast.Expr) { n.Type = e })
 
 	case *ast.GenDecl:
 		for _, s := range n.Specs {
