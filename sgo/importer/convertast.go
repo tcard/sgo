@@ -41,7 +41,7 @@ func (c *astConverter) convertAST(node ast.Node, replace func(e ast.Expr)) {
 
 	case *ast.FieldList:
 		for _, f := range n.List {
-			c.convertAST(f, func(e ast.Expr) { f.Type = e })
+			c.convertAST(f, nil)
 		}
 
 	case *ast.StarExpr:
@@ -57,13 +57,13 @@ func (c *astConverter) convertAST(node ast.Node, replace func(e ast.Expr)) {
 		if !ok {
 			break
 		}
-		if types.IsInterface(tn.Type()) {
+		if replace != nil && types.IsInterface(tn.Type()) {
 			replace(&ast.OptionalType{Elt: n})
 		}
 
 	// Types
 	case *ast.ArrayType:
-		c.convertAST(n.Elt, nil)
+		c.convertAST(n.Elt, func(e ast.Expr) { n.Elt = e })
 
 	case *ast.StructType:
 		c.convertAST(n.Fields, nil)
@@ -80,8 +80,12 @@ func (c *astConverter) convertAST(node ast.Node, replace func(e ast.Expr)) {
 		}
 
 	case *ast.InterfaceType:
-		replace(&ast.OptionalType{Elt: n})
-		c.convertAST(n.Methods, nil)
+		if replace != nil {
+			replace(&ast.OptionalType{Elt: n})
+		}
+		for _, f := range n.Methods.List {
+			c.convertAST(f.Type, nil)
+		}
 
 	case *ast.MapType:
 		replace(&ast.OptionalType{Elt: n})
@@ -99,7 +103,7 @@ func (c *astConverter) convertAST(node ast.Node, replace func(e ast.Expr)) {
 		}
 
 	case *ast.TypeSpec:
-		c.convertAST(n.Type, func(e ast.Expr) { n.Type = e })
+		c.convertAST(n.Type, nil)
 
 	case *ast.GenDecl:
 		for _, s := range n.Specs {
@@ -109,7 +113,7 @@ func (c *astConverter) convertAST(node ast.Node, replace func(e ast.Expr)) {
 			case *ast.ValueSpec:
 				c.convertAST(s, func(e ast.Expr) { s.Type = e })
 			case *ast.TypeSpec:
-				c.convertAST(s, func(e ast.Expr) { s.Type = e })
+				c.convertAST(s, nil)
 			}
 		}
 

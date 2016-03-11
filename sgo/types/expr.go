@@ -1036,7 +1036,7 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 			}
 
 			if atyp, _ := typ.Underlying().(*Array); atyp != nil && atyp.len > -1 && int64(len(e.Elts)) != atyp.len {
-				if has, paths := hasZeroValue(atyp); !has {
+				if has, paths := check.hasZeroValue(atyp); !has {
 					check.errorHasZeroValuePaths(e.End(), paths)
 				}
 			}
@@ -1050,7 +1050,7 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 		switch typ, _ := deref(typ); utyp := typ.Underlying().(type) {
 		case *Struct:
 			if len(e.Elts) == 0 {
-				if has, paths := hasZeroValue(typ); !has {
+				if has, paths := check.hasZeroValue(typ); !has {
 					check.errorHasZeroValuePaths(e.Rbrace, paths)
 				}
 				break
@@ -1089,7 +1089,7 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 				}
 				for _, v := range visited {
 					if !v {
-						if has, paths := hasZeroValue(typ); !has {
+						if has, paths := check.hasZeroValue(typ); !has {
 							check.errorHasZeroValuePaths(e.Rbrace, paths)
 						}
 						break

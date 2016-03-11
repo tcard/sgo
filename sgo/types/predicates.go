@@ -332,7 +332,10 @@ func defaultType(typ Type) Type {
 	return typ
 }
 
-func hasZeroValue(typ Type) (has bool, paths [][]string) {
+func (check *Checker) hasZeroValue(typ Type) (has bool, paths [][]string) {
+	if check.conf.AllowUninitializedExprs {
+		return false, nil
+	}
 	has = hasZeroValue2(typ, nil, func(namestack []string) {
 		paths = append(paths, namestack)
 	})

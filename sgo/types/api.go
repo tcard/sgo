@@ -132,6 +132,11 @@ type Config struct {
 	// If DisableUnusedImportCheck is set, packages are not checked
 	// for unused imports.
 	DisableUnusedImportCheck bool
+
+	// If AllowUninitializedExprs is set, expressions with a type that doesn't
+	// have a complete zero value are allowed to not be fully initialized.
+	// This can cause unexpected nil dereferences.
+	AllowUninitializedExprs bool
 }
 
 // Info holds result type information for a type-checked package.

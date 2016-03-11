@@ -705,6 +705,9 @@ func (check *Checker) structType(styp *Struct, e *ast.StructType, path []*TypeNa
 			// anonymous field
 			name := anonymousFieldIdent(f.Type)
 			pos := f.Type.Pos()
+			if isOptional(typ) {
+				typ = typ.Underlying().(*Optional).Elem()
+			}
 			t, isPtr := deref(typ)
 			switch t := t.(type) {
 			case *Basic:
@@ -757,6 +760,8 @@ func anonymousFieldIdent(e ast.Expr) *ast.Ident {
 		return e
 	case *ast.StarExpr:
 		return anonymousFieldIdent(e.X)
+	case *ast.OptionalType:
+		return anonymousFieldIdent(e.Elt)
 	case *ast.SelectorExpr:
 		return e.Sel
 	}
