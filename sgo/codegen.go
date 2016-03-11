@@ -82,7 +82,7 @@ func typecheck(path string, fset *token.FileSet, sgoFiles ...*ast.File) (*types.
 		Error: func(err error) {
 			errors = append(errors, err)
 		},
-		Importer: importer.Default(),
+		Importer: importer.Default(sgoFiles),
 	}
 	info := &types.Info{
 		Types:      map[ast.Expr]types.TypeAndValue{},

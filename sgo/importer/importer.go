@@ -13,6 +13,7 @@ import (
 	gotypes "go/types"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/constant"
@@ -24,26 +25,46 @@ import (
 // Default returns a types.Importer that imports from Go source code and
 // transforms to SGo.
 //
-// Conversion is performed by passing the AST through ConvertAST.
-func Default() types.Importer {
-	return &importer{imported: map[string]*types.Package{}}
+// For packages imported from any of the passed files, conversion is performed
+// by passing the AST through ConvertAST. The packages that imported packages
+// import themselves are imported by the default go/importer, without
+// transformation to SGo at all, unless they're also imported by those files.
+func Default(files []*ast.File) types.Importer {
+	visiblePaths := map[string]struct{}{}
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			genDecl, ok := decl.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			if genDecl.Tok != token.IMPORT {
+				continue
+			}
+			for _, spec := range genDecl.Specs {
+				path := strings.Trim(spec.(*ast.ImportSpec).Path.Value, "\"`")
+				visiblePaths[path] = struct{}{}
+			}
+		}
+	}
+
+	return &importer{
+		imported:     map[string]*types.Package{},
+		visiblePaths: visiblePaths,
+	}
 }
 
 type importer struct {
-	imported map[string]*types.Package
+	imported     map[string]*types.Package
+	visiblePaths map[string]struct{}
 }
 
-func (imp *importer) converting() types.Importer {
-	return converting{imported: imp.imported, imp: goimporter.Default()}
+func (imp *importer) fromPkg() types.Importer {
+	return fromPkg{fromSrc: imp, imp: goimporter.Default()}
 }
 
 func (imp *importer) Import(path string) (*types.Package, error) {
 	if imported, ok := imp.imported[path]; ok {
 		return imported, nil
-	}
-
-	if path == "unsafe" {
-		return imp.converting().Import(path)
 	}
 
 	buildPkg, err := build.Import(path, "", build.ImportComment)
@@ -67,14 +88,14 @@ func (imp *importer) Import(path string) (*types.Package, error) {
 		files = append(files, a)
 	}
 
-	// 1. Typecheck without converting anything; ConvertAST needs to know
+	// 1. Typecheck without fromPkg anything; ConvertAST needs to know
 	//    which idents are types to perform the default conversions.
 
 	info := &types.Info{Uses: map[*ast.Ident]types.Object{}}
 	cfg := &types.Config{
 		IgnoreFuncBodies:        true,
 		IgnoreTopLevelVarValues: true,
-		Importer:                imp,
+		Importer:                imp.fromPkg(),
 		AllowUninitializedExprs: true,
 	}
 	pkg, err := cfg.Check(path, fset, files, info)
@@ -82,7 +103,7 @@ func (imp *importer) Import(path string) (*types.Package, error) {
 		return nil, err
 	}
 
-	// 2. Convert AST, now using the doc comment annotations and converting
+	// 2. Convert AST, now using the doc comment annotations and fromPkg
 	//    everything that hasn't been converted explicitly by then with the
 	//    default conversion (wrapping in optionals).
 
@@ -101,12 +122,18 @@ func (imp *importer) Import(path string) (*types.Package, error) {
 	return pkg, nil
 }
 
-type converting struct {
-	imported map[string]*types.Package
-	imp      gotypes.Importer
+type fromPkg struct {
+	fromSrc *importer
+	imp     gotypes.Importer
 }
 
-func (c converting) Import(path string) (*types.Package, error) {
+func (c fromPkg) Import(path string) (*types.Package, error) {
+	if imported, ok := c.fromSrc.imported[path]; ok {
+		return imported, nil
+	}
+	if _, ok := c.fromSrc.visiblePaths[path]; ok {
+		return c.fromSrc.Import(path)
+	}
 	gopkg, err := c.imp.Import(path)
 	if err != nil {
 		return nil, err
@@ -338,7 +365,7 @@ func (c *converter) convertTypeName(v *gotypes.TypeName) *types.TypeName {
 	// sets its typ to a *Named referring to itself. So if we get a *TypeName
 	// whose Type() is a *Named whose Obj() is the same *TypeName, we know it
 	// was constructed this way, so we do the same. Otherwise we get into a
-	// infinite recursion converting the *TypeName's type.
+	// infinite recursion fromPkg the *TypeName's type.
 	var typ types.Type
 	if named, ok := v.Type().(*gotypes.Named); !ok || named.Obj() != v {
 		typ = c.convertType(v.Type())
