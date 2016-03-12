@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -67,17 +68,19 @@ func main() {
 						}
 					}()
 					w := &bytes.Buffer{}
-					err := sgo.TranslateFile(w, strings.NewReader(msg.Value.(string)), "name")
-					if err != nil {
-						if errs, ok := err.(scanner.ErrorList); ok {
-							var errMsgs []string
-							for _, err := range errs {
+					errs := sgo.TranslateFile(func() (io.Writer, error) { return w, nil }, strings.NewReader(msg.Value.(string)), "name")
+					if errs != nil {
+						var errMsgs []string
+						for _, err := range errs {
+							if errs, ok := err.(scanner.ErrorList); ok {
+								for _, err := range errs {
+									errMsgs = append(errMsgs, err.Error())
+								}
+							} else {
 								errMsgs = append(errMsgs, err.Error())
 							}
-							resp.Value = strings.Join(errMsgs, "\n")
-						} else {
-							resp.Value = err.Error()
 						}
+						resp.Value = strings.Join(errMsgs, "\n")
 					} else {
 						resp.Value = w.String()
 					}
@@ -89,7 +92,7 @@ func main() {
 				}
 				body := url.Values{}
 				body.Add("version", "2")
-				var err error
+				var errs []error
 				w := &bytes.Buffer{}
 				func() {
 					defer func() {
@@ -98,14 +101,24 @@ func main() {
 							stack := make([]byte, 99999)
 							runtime.Stack(stack, false)
 							value += string(stack)
-							err = errors.New(value)
+							errs = append(errs, errors.New(value))
 						}
 					}()
 
-					err = sgo.TranslateFile(w, strings.NewReader(msg.Value.(string)), "name")
+					errs = sgo.TranslateFile(func() (io.Writer, error) { return w, nil }, strings.NewReader(msg.Value.(string)), "name")
 				}()
-				if err != nil {
-					resp.Value = err.Error()
+				if errs != nil {
+					var errMsgs []string
+					for _, err := range errs {
+						if errs, ok := err.(scanner.ErrorList); ok {
+							for _, err := range errs {
+								errMsgs = append(errMsgs, err.Error())
+							}
+						} else {
+							errMsgs = append(errMsgs, err.Error())
+						}
+					}
+					resp.Value = strings.Join(errMsgs, "\n")
 				} else {
 					body.Add("body", w.String())
 					postResp, err := http.PostForm("http://play.golang.org/compile", body)

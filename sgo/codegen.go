@@ -3,14 +3,15 @@ package sgo
 import (
 	"bytes"
 	"fmt"
-	goast "go/ast"
-	goprinter "go/printer"
-	gotoken "go/token"
+	"go/build"
 	"io"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/importer"
+	"github.com/tcard/sgo/sgo/importpaths"
 	"github.com/tcard/sgo/sgo/parser"
 	"github.com/tcard/sgo/sgo/printer"
 	"github.com/tcard/sgo/sgo/scanner"
@@ -18,41 +19,138 @@ import (
 	"github.com/tcard/sgo/sgo/types"
 )
 
-func TranslateFile(w io.Writer, r io.Reader, filename string) error {
-	src, err := ioutil.ReadAll(r)
+func TranslatePaths(paths []string) (warnings []error, errs []error) {
+	cwd, err := os.Getwd()
 	if err != nil {
-		return err
+		errs = append(errs, err)
+		return
 	}
 
+	paths, warnings = importpaths.ImportPaths(paths)
+	for _, path := range paths {
+		pkg, err := build.Default.Import(path, cwd, build.FindOnly|build.IgnoreVendor)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		errs = append(errs, TranslateDir(pkg.Dir)...)
+	}
+	return warnings, errs
+}
+
+func TranslateDir(dir string) []error {
+	var errs []error
+	var named []NamedFile
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		ext := filepath.Ext(path)
+		if ext != ".sgo" {
+			return nil
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		named = append(named, NamedFile{path, f})
+		return nil
+	})
+	for _, n := range named {
+		defer n.File.(*os.File).Close()
+	}
+	if err != nil {
+		errs = append(errs, err)
+		return errs
+	}
+
+	translated, transErrs := TranslateFiles(named...)
+	errs = append(errs, transErrs...)
+	if len(errs) > 0 {
+		return errs
+	}
+
+	for i, t := range translated {
+		path := named[i].Path
+		ext := filepath.Ext(path)
+		dst, err := os.Create(path[:len(path)-len(ext)] + ".go")
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		_, err = dst.Write(t)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+	}
+
+	return errs
+}
+
+type NamedFile struct {
+	Path string
+	File io.Reader
+}
+
+func TranslateFiles(files ...NamedFile) ([][]byte, []error) {
+	var errs []error
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, filename, src, parser.ParseComments)
-	if err != nil {
-		return err
+
+	var parsed []*ast.File
+	var srcs [][]byte
+	for _, named := range files {
+		src, err := ioutil.ReadAll(named.File)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+
+		file, err := parser.ParseFile(fset, filepath.Base(named.Path), src, parser.ParseComments)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		srcs = append(srcs, src)
+		parsed = append(parsed, file)
 	}
 
-	// Early typecheck, because fileWithAnnotationComments messes with line
-	// numbers.
-	_, errs := typecheck("translate", fset, file)
+	fset = token.NewFileSet() // fileWithAnnotationComments will reparse.
+	for i, p := range parsed {
+		var err error
+		srcs[i], parsed[i], err = fileWithAnnotationComments(p, fset, srcs[i])
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
 	if len(errs) > 0 {
-		return makeErrList(fset, errs)
+		return nil, errs
 	}
 
-	file, err = fileWithAnnotationComments(file, fset, src)
-	if err != nil {
-		return err
+	info, typeErrs := typecheck("translate", fset, parsed...)
+	if len(typeErrs) > 0 {
+		errs = append(errs, makeErrList(fset, typeErrs))
+		return nil, errs
 	}
 
-	info, errs := typecheck("translate", fset, file)
+	return translate(info, srcs, parsed), errs
+}
+
+func TranslateFile(w func() (io.Writer, error), r io.Reader, filename string) []error {
+	gen, errs := TranslateFiles(NamedFile{filename, r})
 	if len(errs) > 0 {
-		return makeErrList(fset, errs)
+		return errs
 	}
 
-	gofset := gotoken.NewFileSet()
-
-	gen := translate(info, gofset, fset, file)
-	err = goprinter.Fprint(w, gofset, gen[0])
+	to, err := w()
 	if err != nil {
-		return err
+		return []error{err}
+	}
+
+	_, err = to.Write(gen[0])
+	if err != nil {
+		return []error{err}
 	}
 
 	return nil
@@ -100,22 +198,15 @@ func typecheck(path string, fset *token.FileSet, sgoFiles ...*ast.File) (*types.
 	return info, nil
 }
 
-func translate(info *types.Info, gofset *gotoken.FileSet, fset *token.FileSet, sgoFiles ...*ast.File) []*goast.File {
-	var goFiles []*goast.File
-	for _, sgoFile := range sgoFiles {
-		fsetFile := fset.File(sgoFile.Pos())
-		goFile := convertAST(gofset, fsetFile, info, sgoFile)
-		tokenFile := gofset.AddFile(goFile.Name.Name, -1, int(goFile.End()))
-		for _, com := range goFile.Comments {
-			// Yeah, I don't know why this works, but it does.
-			tokenFile.AddLine(int(com.Pos()) - 1)
-		}
-		goFiles = append(goFiles, goFile)
+func translate(info *types.Info, srcs [][]byte, sgoFiles []*ast.File) [][]byte {
+	dsts := make([][]byte, 0, len(sgoFiles))
+	for i, sgoFile := range sgoFiles {
+		dsts = append(dsts, convertAST(info, srcs[i], sgoFile))
 	}
-	return goFiles
+	return dsts
 }
 
-func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte) (*ast.File, error) {
+func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte) ([]byte, *ast.File, error) {
 	// TODO: So this is an extremely hacky way of doing this. We're going to
 	// add the comments directly to the source comments, as text, and then
 	// we're going to re-parse it. This is because I tried manipulating the
@@ -124,7 +215,8 @@ func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte)
 	// the time where you are, where you _were_, figure out where's a line
 	// break, etc. So, well, this will do for now.
 	var err error
-	offset := 0
+	var dstChunks [][]byte
+	var lastChunkEnd int
 	skipNextSpec := false
 	addDoc := func(node ast.Node, name *ast.Ident, typ ast.Expr) {
 		if typ == nil {
@@ -141,14 +233,14 @@ func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte)
 		if err != nil {
 			return
 		}
-		pos := int(node.Pos()) - 1 + offset
+		pos := int(node.Pos() - file.Pos())
 		var space []byte
 		for i := pos - 1; i >= 0 && (src[i] == ' ' || src[i] == '\t'); i-- {
 			space = append([]byte{src[i]}, space...)
 		}
 		text := append([]byte("// For SGo: "+buf.String()+"\n"), space...)
-		src = append(src[:pos], append(text, src[pos:]...)...)
-		offset += len(text)
+		dstChunks = append(dstChunks, src[lastChunkEnd:pos], text)
+		lastChunkEnd = pos
 	}
 	var visitor visitorFunc
 	visitor = visitorFunc(func(node ast.Node) (w ast.Visitor) {
@@ -221,10 +313,12 @@ func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte)
 	})
 	ast.Walk(visitor, file)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return parser.ParseFile(fset, file.Name.Name, src, parser.ParseComments)
+	dst := bytes.Join(append(dstChunks, src[lastChunkEnd:]), nil)
+	dstFile, err := parser.ParseFile(fset, file.Name.Name, dst, parser.ParseComments)
+	return dst, dstFile, err
 }
 
 type visitorFunc func(node ast.Node) (w ast.Visitor)
@@ -233,941 +327,756 @@ func (v visitorFunc) Visit(node ast.Node) (w ast.Visitor) {
 	return v(node)
 }
 
-func convertAST(gofset *gotoken.FileSet, fsetFile *token.File, info *types.Info, sgoAST *ast.File) *goast.File {
+func convertAST(info *types.Info, src []byte, sgoAST *ast.File) []byte {
 	c := converter{
-		Info:     info,
-		gofset:   gofset,
-		fsetFile: fsetFile,
-		comments: map[*ast.CommentGroup]*goast.CommentGroup{},
+		Info: info,
+		src:  src,
+		base: int(sgoAST.Pos()) - 1,
 	}
-	ret := c.convertFile(sgoAST)
-	// f := gofset.AddFile(ret.Name.Name, -1, int(ret.End()))
-	// f.SetLines(c.lines)
-	return ret
+	c.convertFile(sgoAST)
+	return bytes.Join(append(c.dstChunks, src[c.lastChunkEnd:]), nil)
 }
 
 type converter struct {
 	*types.Info
-	gofset      *gotoken.FileSet
-	fsetFile    *token.File
 	lastFunc    *types.Signature
-	lastFuncAST *goast.FuncType
-	comments    map[*ast.CommentGroup]*goast.CommentGroup
-	posOffset   int
-	lastLine    int
-	lines       []int
+	lastFuncAST *ast.FuncType
+
+	base         int
+	src          []byte
+	dstChunks    [][]byte
+	lastChunkEnd int
 }
 
-func (c *converter) convertFile(v *ast.File) *goast.File {
+func (c *converter) convertFile(v *ast.File) {
 	if v == nil {
-		return nil
+		return
 	}
-	ret := &goast.File{}
-	ret.Doc = c.convertCommentGroup(v.Doc)
-	ret.Package = c.convertPos(v.Package)
-	ret.Name = c.convertIdent(v.Name)
+	c.convertIdent(v.Name)
 	for _, v := range v.Decls {
-		ret.Decls = append(ret.Decls, c.convertDecl(v))
-	}
-	for _, v := range v.Comments {
-		if cg, ok := c.comments[v]; ok {
-			ret.Comments = append(ret.Comments, cg)
-		} else {
-			ret.Comments = append(ret.Comments, c.convertCommentGroup(v))
-		}
-	}
-	return ret
-}
-
-func (c *converter) convertCommentGroup(v *ast.CommentGroup) *goast.CommentGroup {
-	if v == nil {
-		return nil
-	}
-	var list []*goast.Comment
-	for _, v := range v.List {
-		list = append(list, c.convertComment(v))
-	}
-	ret := &goast.CommentGroup{
-		List: list,
-	}
-	c.comments[v] = ret
-	return ret
-}
-
-func (c *converter) convertComment(v *ast.Comment) *goast.Comment {
-	if v == nil {
-		return nil
-	}
-	return &goast.Comment{
-		Slash: c.convertPos(v.Slash),
-		Text:  v.Text,
+		c.convertDecl(v)
 	}
 }
 
-func (c *converter) convertDecl(v ast.Decl) goast.Decl {
+func (c *converter) convertDecl(v ast.Decl) {
 	if v == nil {
-		return nil
+		return
 	}
 	switch v := v.(type) {
 	case *ast.GenDecl:
-		return c.convertGenDecl(v)
+		c.convertGenDecl(v)
+		return
 	case *ast.FuncDecl:
-		return c.convertFuncDecl(v)
+		c.convertFuncDecl(v)
+		return
 	case *ast.BadDecl:
-		return c.convertBadDecl(v)
+		c.convertBadDecl(v)
+		return
 	default:
 		panic(fmt.Sprintf("unhandled Decl %T", v))
 	}
 }
 
-func (c *converter) convertBadDecl(v *ast.BadDecl) *goast.BadDecl {
+func (c *converter) convertBadDecl(v *ast.BadDecl) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.BadDecl{
-		From: c.convertPos(v.From),
-		To:   c.convertPos(v.To),
-	}
+
 }
 
-func (c *converter) convertGenDecl(v *ast.GenDecl) *goast.GenDecl {
+func (c *converter) convertGenDecl(v *ast.GenDecl) {
 	if v == nil {
-		return nil
+		return
 	}
-	ret := &goast.GenDecl{}
-	ret.Doc = c.convertCommentGroup(v.Doc)
-	ret.TokPos = c.convertPos(v.TokPos)
-	ret.Tok = c.convertToken(v.Tok)
-	ret.Lparen = c.convertPos(v.Lparen)
 	for _, v := range v.Specs {
-		ret.Specs = append(ret.Specs, c.convertSpec(v))
+		c.convertSpec(v)
 	}
-	ret.Rparen = c.convertPos(v.Rparen)
-	return ret
 }
 
-func (c *converter) convertSpec(v ast.Spec) goast.Spec {
+func (c *converter) convertSpec(v ast.Spec) {
 	if v == nil {
-		return nil
+		return
 	}
 	switch v := v.(type) {
 	case *ast.TypeSpec:
-		return c.convertTypeSpec(v)
+		c.convertTypeSpec(v)
+		return
 	case *ast.ImportSpec:
-		return c.convertImportSpec(v)
+		c.convertImportSpec(v)
+		return
 	case *ast.ValueSpec:
-		return c.convertValueSpec(v)
+		c.convertValueSpec(v)
+		return
 	default:
 		panic(fmt.Sprintf("unhandled Spec %T", v))
 	}
 }
 
-func (c *converter) convertTypeSpec(v *ast.TypeSpec) *goast.TypeSpec {
+func (c *converter) convertTypeSpec(v *ast.TypeSpec) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.TypeSpec{
-		Doc:     c.convertCommentGroup(v.Doc),
-		Name:    c.convertIdent(v.Name),
-		Type:    c.convertExpr(v.Type),
-		Comment: c.convertCommentGroup(v.Comment),
-	}
+
+	c.convertIdent(v.Name)
+	c.convertExpr(v.Type)
 }
 
-func (c *converter) convertImportSpec(v *ast.ImportSpec) *goast.ImportSpec {
+func (c *converter) convertImportSpec(v *ast.ImportSpec) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.ImportSpec{
-		Doc:     c.convertCommentGroup(v.Doc),
-		Name:    c.convertIdent(v.Name),
-		Path:    c.convertBasicLit(v.Path),
-		Comment: c.convertCommentGroup(v.Comment),
-		EndPos:  c.convertPos(v.EndPos),
-	}
+
+	c.convertIdent(v.Name)
+	c.convertBasicLit(v.Path)
 }
 
-func (c *converter) convertValueSpec(v *ast.ValueSpec) *goast.ValueSpec {
+func (c *converter) convertValueSpec(v *ast.ValueSpec) {
 	if v == nil {
-		return nil
+		return
 	}
-	ret := &goast.ValueSpec{}
-	ret.Doc = c.convertCommentGroup(v.Doc)
 	for _, name := range v.Names {
-		ret.Names = append(ret.Names, c.convertIdent(name))
+		c.convertIdent(name)
 	}
-	ret.Type = c.convertExpr(v.Type)
-	ret.Values = c.convertExprList(v.Values)
-	ret.Comment = c.convertCommentGroup(v.Comment)
-	return ret
+	c.convertExpr(v.Type)
+	c.convertExprList(v.Values)
 }
 
-func (c *converter) convertExprList(v *ast.ExprList) []goast.Expr {
+func (c *converter) convertExprList(v *ast.ExprList) {
 	if v == nil {
-		return nil
+		return
 	}
-	var exprs []goast.Expr
-	for _, expr := range v.List {
-		exprs = append(exprs, c.convertExpr(expr))
+	for i, expr := range v.List {
+		if i == v.EntangledPos {
+			c.putChunks(int(expr.Pos())-1, c.src[c.lastChunkEnd:int(v.List[i-1].End())-c.base-1], []byte(", "))
+		}
+		c.convertExpr(expr)
 	}
-	return exprs
 }
 
-func (c *converter) convertFuncDecl(v *ast.FuncDecl) *goast.FuncDecl {
+func (c *converter) convertFuncDecl(v *ast.FuncDecl) {
 	if v == nil {
-		return nil
+		return
 	}
-	ret := &goast.FuncDecl{}
-	ret.Doc = c.convertCommentGroup(v.Doc)
-	ret.Recv = c.convertFieldList(v.Recv)
-	ret.Name = c.convertIdent(v.Name)
-	typ, unset := c.setLastFunc(c.Info.ObjectOf(v.Name).Type().(*types.Signature), v.Type)
+	c.convertFieldList(v.Recv)
+	c.convertFuncType(v.Type)
+	c.convertIdent(v.Name)
+	unset := c.setLastFunc(c.Info.ObjectOf(v.Name).Type().(*types.Signature), v.Type)
 	defer unset()
-	ret.Type = typ
-	ret.Body = c.convertBlockStmt(v.Body)
-	return ret
+	c.convertBlockStmt(v.Body)
 }
 
-func (c *converter) setLastFunc(sig *types.Signature, astTyp *ast.FuncType) (*goast.FuncType, func()) {
+func (c *converter) setLastFunc(sig *types.Signature, astTyp *ast.FuncType) func() {
 	oldLastFunc, oldLastFuncAST := c.lastFunc, c.lastFuncAST
 	c.lastFunc = sig
-	goTyp := c.convertFuncType(astTyp)
-	c.lastFuncAST = goTyp
-	return goTyp, func() {
+	c.lastFuncAST = astTyp
+	return func() {
 		c.lastFunc, c.lastFuncAST = oldLastFunc, oldLastFuncAST
 	}
 }
 
-func (c *converter) convertFuncType(v *ast.FuncType) *goast.FuncType {
+func (c *converter) convertFuncType(v *ast.FuncType) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.FuncType{
-		Func:    c.convertPos(v.Func),
-		Params:  c.convertFieldList(v.Params),
-		Results: c.convertFieldList(v.Results),
-	}
+
+	c.convertFieldList(v.Params)
+	c.convertFieldList(v.Results)
 }
 
-func (c *converter) convertStmt(v ast.Stmt) goast.Stmt {
+func (c *converter) convertStmt(v ast.Stmt) {
 	if v == nil {
-		return nil
+		return
 	}
 	switch v := v.(type) {
 	case *ast.ReturnStmt:
-		return c.convertReturnStmt(v)
+		c.convertReturnStmt(v)
+		return
 	case *ast.AssignStmt:
-		return c.convertAssignStmt(v)
+		c.convertAssignStmt(v)
+		return
 	case *ast.IfStmt:
-		return c.convertIfStmt(v)
+		c.convertIfStmt(v)
+		return
 	case *ast.ExprStmt:
-		return c.convertExprStmt(v)
+		c.convertExprStmt(v)
+		return
 	case *ast.BlockStmt:
-		return c.convertBlockStmt(v)
+		c.convertBlockStmt(v)
+		return
 	case *ast.DeclStmt:
-		return c.convertDeclStmt(v)
+		c.convertDeclStmt(v)
+		return
 	case *ast.TypeSwitchStmt:
-		return c.convertTypeSwitchStmt(v)
+		c.convertTypeSwitchStmt(v)
+		return
 	case *ast.CaseClause:
-		return c.convertCaseClause(v)
+		c.convertCaseClause(v)
+		return
 	case *ast.BadStmt:
-		return c.convertBadStmt(v)
+		c.convertBadStmt(v)
+		return
 	case *ast.BranchStmt:
-		return c.convertBranchStmt(v)
+		c.convertBranchStmt(v)
+		return
 	case *ast.CommClause:
-		return c.convertCommClause(v)
+		c.convertCommClause(v)
+		return
 	case *ast.DeferStmt:
-		return c.convertDeferStmt(v)
+		c.convertDeferStmt(v)
+		return
 	case *ast.EmptyStmt:
-		return c.convertEmptyStmt(v)
+		c.convertEmptyStmt(v)
+		return
 	case *ast.ForStmt:
-		return c.convertForStmt(v)
+		c.convertForStmt(v)
+		return
 	case *ast.GoStmt:
-		return c.convertGoStmt(v)
+		c.convertGoStmt(v)
+		return
 	case *ast.IncDecStmt:
-		return c.convertIncDecStmt(v)
+		c.convertIncDecStmt(v)
+		return
 	case *ast.LabeledStmt:
-		return c.convertLabeledStmt(v)
+		c.convertLabeledStmt(v)
+		return
 	case *ast.RangeStmt:
-		return c.convertRangeStmt(v)
+		c.convertRangeStmt(v)
+		return
 	case *ast.SelectStmt:
-		return c.convertSelectStmt(v)
+		c.convertSelectStmt(v)
+		return
 	case *ast.SendStmt:
-		return c.convertSendStmt(v)
+		c.convertSendStmt(v)
+		return
 	case *ast.SwitchStmt:
-		return c.convertSwitchStmt(v)
+		c.convertSwitchStmt(v)
+		return
 	default:
 		panic(fmt.Sprintf("unhandled Stmt %T", v))
 	}
 }
 
-func (c *converter) convertSwitchStmt(v *ast.SwitchStmt) *goast.SwitchStmt {
+func (c *converter) convertSwitchStmt(v *ast.SwitchStmt) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.SwitchStmt{
-		Switch: c.convertPos(v.Switch),
-		Init:   c.convertStmt(v.Init),
-		Tag:    c.convertExpr(v.Tag),
-		Body:   c.convertBlockStmt(v.Body),
+
+	c.convertStmt(v.Init)
+	c.convertExpr(v.Tag)
+	c.convertBlockStmt(v.Body)
+}
+
+func (c *converter) convertSendStmt(v *ast.SendStmt) {
+	if v == nil {
+		return
+	}
+
+	c.convertExpr(v.Chan)
+	c.convertExpr(v.Value)
+}
+
+func (c *converter) convertSelectStmt(v *ast.SelectStmt) {
+	if v == nil {
+		return
+	}
+
+	c.convertBlockStmt(v.Body)
+}
+
+func (c *converter) convertRangeStmt(v *ast.RangeStmt) {
+	if v == nil {
+		return
+	}
+
+	c.convertExpr(v.Key)
+	c.convertExpr(v.Value)
+	c.convertExpr(v.X)
+	c.convertBlockStmt(v.Body)
+}
+
+func (c *converter) convertLabeledStmt(v *ast.LabeledStmt) {
+	if v == nil {
+		return
+	}
+
+	c.convertIdent(v.Label)
+	c.convertStmt(v.Stmt)
+}
+
+func (c *converter) convertIncDecStmt(v *ast.IncDecStmt) {
+	if v == nil {
+		return
+	}
+
+	c.convertExpr(v.X)
+}
+
+func (c *converter) convertForStmt(v *ast.ForStmt) {
+	if v == nil {
+		return
+	}
+
+	c.convertStmt(v.Init)
+	c.convertExpr(v.Cond)
+	c.convertStmt(v.Post)
+	c.convertBlockStmt(v.Body)
+}
+
+func (c *converter) convertEmptyStmt(v *ast.EmptyStmt) {
+	if v == nil {
+		return
 	}
 }
 
-func (c *converter) convertSendStmt(v *ast.SendStmt) *goast.SendStmt {
+func (c *converter) convertDeferStmt(v *ast.DeferStmt) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.SendStmt{
-		Chan:  c.convertExpr(v.Chan),
-		Arrow: c.convertPos(v.Arrow),
-		Value: c.convertExpr(v.Value),
-	}
+
+	c.convertCallExpr(v.Call)
 }
 
-func (c *converter) convertSelectStmt(v *ast.SelectStmt) *goast.SelectStmt {
+func (c *converter) convertGoStmt(v *ast.GoStmt) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.SelectStmt{
-		Select: c.convertPos(v.Select),
-		Body:   c.convertBlockStmt(v.Body),
-	}
+
+	c.convertCallExpr(v.Call)
 }
 
-func (c *converter) convertRangeStmt(v *ast.RangeStmt) *goast.RangeStmt {
+func (c *converter) convertBranchStmt(v *ast.BranchStmt) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.RangeStmt{
-		For:    c.convertPos(v.For),
-		Key:    c.convertExpr(v.Key),
-		Value:  c.convertExpr(v.Value),
-		TokPos: c.convertPos(v.TokPos),
-		Tok:    c.convertToken(v.Tok),
-		X:      c.convertExpr(v.X),
-		Body:   c.convertBlockStmt(v.Body),
-	}
+
+	c.convertIdent(v.Label)
 }
 
-func (c *converter) convertLabeledStmt(v *ast.LabeledStmt) *goast.LabeledStmt {
+func (c *converter) convertCommClause(v *ast.CommClause) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.LabeledStmt{
-		Label: c.convertIdent(v.Label),
-		Colon: c.convertPos(v.Colon),
-		Stmt:  c.convertStmt(v.Stmt),
-	}
-}
-
-func (c *converter) convertIncDecStmt(v *ast.IncDecStmt) *goast.IncDecStmt {
-	if v == nil {
-		return nil
-	}
-	return &goast.IncDecStmt{
-		X:      c.convertExpr(v.X),
-		TokPos: c.convertPos(v.TokPos),
-		Tok:    c.convertToken(v.Tok),
-	}
-}
-
-func (c *converter) convertForStmt(v *ast.ForStmt) *goast.ForStmt {
-	if v == nil {
-		return nil
-	}
-	return &goast.ForStmt{
-		For:  c.convertPos(v.For),
-		Init: c.convertStmt(v.Init),
-		Cond: c.convertExpr(v.Cond),
-		Post: c.convertStmt(v.Post),
-		Body: c.convertBlockStmt(v.Body),
-	}
-}
-
-func (c *converter) convertEmptyStmt(v *ast.EmptyStmt) *goast.EmptyStmt {
-	if v == nil {
-		return nil
-	}
-	return &goast.EmptyStmt{
-		Semicolon: c.convertPos(v.Semicolon),
-		Implicit:  v.Implicit,
-	}
-}
-
-func (c *converter) convertDeferStmt(v *ast.DeferStmt) *goast.DeferStmt {
-	if v == nil {
-		return nil
-	}
-	return &goast.DeferStmt{
-		Defer: c.convertPos(v.Defer),
-		Call:  c.convertCallExpr(v.Call),
-	}
-}
-
-func (c *converter) convertGoStmt(v *ast.GoStmt) *goast.GoStmt {
-	if v == nil {
-		return nil
-	}
-	return &goast.GoStmt{
-		Go:   c.convertPos(v.Go),
-		Call: c.convertCallExpr(v.Call),
-	}
-}
-
-func (c *converter) convertBranchStmt(v *ast.BranchStmt) *goast.BranchStmt {
-	if v == nil {
-		return nil
-	}
-	return &goast.BranchStmt{
-		TokPos: c.convertPos(v.TokPos),
-		Tok:    c.convertToken(v.Tok),
-		Label:  c.convertIdent(v.Label),
-	}
-}
-
-func (c *converter) convertCommClause(v *ast.CommClause) *goast.CommClause {
-	if v == nil {
-		return nil
-	}
-	ret := &goast.CommClause{}
-	ret.Case = c.convertPos(v.Case)
-	ret.Comm = c.convertStmt(v.Comm)
-	ret.Colon = c.convertPos(v.Colon)
+	c.convertStmt(v.Comm)
 	for _, v := range v.Body {
-		ret.Body = append(ret.Body, c.convertStmt(v))
+		c.convertStmt(v)
 	}
-	return ret
 }
 
-func (c *converter) convertReturnStmt(v *ast.ReturnStmt) *goast.ReturnStmt {
+func (c *converter) convertReturnStmt(v *ast.ReturnStmt) {
 	if v == nil {
-		return nil
+		return
 	}
-	ret := &goast.ReturnStmt{}
-	ret.Return = c.convertPos(v.Return)
 	if v.Results.EntangledPos == 0 {
 		// return \ err
-		ePos := c.convertPos(v.Results.Pos())
 		resultsLen := c.lastFunc.Results().Len()
+		results := make([][]byte, 0, resultsLen)
 		for i := 0; i < resultsLen; i++ {
 			typ := c.lastFunc.Results().At(i).Type()
-			var e goast.Expr
 			switch underlying := typ.Underlying().(type) {
 			case *types.Pointer, *types.Map, *types.Slice, *types.Signature, *types.Interface, *types.Optional:
-				e = c.injectedIdent("nil", ePos)
+				results = append(results, []byte("nil"))
 			case *types.Struct:
 				typ := c.lastFuncAST.Results.List[i].Type
-				typLen := typ.End() - typ.Pos()
-				cl := &goast.CompositeLit{Type: typ}
-				cl.Lbrace = ePos + typLen
-				cl.Rbrace = cl.Rbrace + 1
-				e = cl
+				results = append(results, append(c.src[typ.Pos():typ.End()], '{', '}'))
 			case *types.Basic:
 				info := underlying.Info()
 				switch {
 				case info&types.IsBoolean != 0:
-					e = c.injectedIdent("false", ePos)
+					results = append(results, []byte("false"))
 				case info&types.IsInteger != 0:
-					e = c.injectedBasicLit(gotoken.INT, "0", ePos)
+					results = append(results, []byte("0"))
 				case info&types.IsFloat != 0, info&types.IsComplex != 0:
-					e = c.injectedBasicLit(gotoken.FLOAT, "0.0", ePos)
+					results = append(results, []byte("0.0"))
 				case info&types.IsString != 0:
-					e = c.injectedBasicLit(gotoken.STRING, `""`, ePos)
+					results = append(results, []byte(`""`))
 				default:
-					e = c.injectedIdent("nil", ePos)
+					results = append(results, []byte("nil"))
 				}
 			default:
 				panic(fmt.Sprintf("unhandled Type %v", typ))
 			}
-			ret.Results = append(ret.Results, e)
-			ePos += e.End() - e.Pos()
-			if i < resultsLen-1 {
-				ePos += gotoken.Pos(len(", "))
-				c.posOffset += len(", ")
-			}
 		}
+		text := append(bytes.Join(results, []byte(", ")), []byte(", ")...)
+		c.putChunks(int(v.Results.Pos())-1, c.src[c.lastChunkEnd:int(v.Pos())-c.base-1+len("return ")], text)
 	}
 	for _, v := range v.Results.List {
-		ret.Results = append(ret.Results, c.convertExpr(v))
+		c.convertExpr(v)
 	}
 	if v.Results.EntangledPos > 0 {
-		id := "nil"
+		// return x, y, z \
+		chunk := ", nil"
 		if c.lastFunc.Results().Entangled().Type() == types.Typ[types.Bool] {
-			id = "true"
+			chunk = ", true"
 		}
-		ret.Results = append(ret.Results, c.injectedIdent(id, c.convertPos(v.Results.End())))
-	}
-	return ret
-}
-
-func (c *converter) convertBadStmt(v *ast.BadStmt) *goast.BadStmt {
-	if v == nil {
-		return nil
-	}
-	return &goast.BadStmt{
-		From: c.convertPos(v.From),
-		To:   c.convertPos(v.To),
+		c.putChunks(int(v.Results.End())+1, c.src[c.lastChunkEnd:int(v.Results.End())-c.base-1], []byte(chunk))
 	}
 }
 
-func (c *converter) convertAssignStmt(v *ast.AssignStmt) *goast.AssignStmt {
+func (c *converter) convertBadStmt(v *ast.BadStmt) {
 	if v == nil {
-		return nil
+		return
 	}
-	ret := &goast.AssignStmt{}
-	for _, v := range v.Lhs.List {
-		ret.Lhs = append(ret.Lhs, c.convertExpr(v))
-	}
-	ret.TokPos = c.convertPos(v.TokPos)
-	ret.Tok = c.convertToken(v.Tok)
-	for _, v := range v.Rhs.List {
-		ret.Rhs = append(ret.Rhs, c.convertExpr(v))
-	}
-	return ret
+
 }
 
-func (c *converter) convertDeclStmt(v *ast.DeclStmt) *goast.DeclStmt {
+func (c *converter) convertAssignStmt(v *ast.AssignStmt) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.DeclStmt{
-		Decl: c.convertDecl(v.Decl),
-	}
+	c.convertExprList(v.Lhs)
+	c.convertExprList(v.Rhs)
 }
 
-func (c *converter) convertBlockStmt(v *ast.BlockStmt) *goast.BlockStmt {
+func (c *converter) convertDeclStmt(v *ast.DeclStmt) {
 	if v == nil {
-		return nil
+		return
 	}
-	ret := &goast.BlockStmt{}
-	ret.Lbrace = c.convertPos(v.Lbrace)
+
+	c.convertDecl(v.Decl)
+}
+
+func (c *converter) convertBlockStmt(v *ast.BlockStmt) {
+	if v == nil {
+		return
+	}
 	for _, v := range v.List {
-		ret.List = append(ret.List, c.convertStmt(v))
-	}
-	ret.Rbrace = c.convertPos(v.Rbrace)
-	return ret
-}
-
-func (c *converter) convertTypeSwitchStmt(v *ast.TypeSwitchStmt) *goast.TypeSwitchStmt {
-	if v == nil {
-		return nil
-	}
-	return &goast.TypeSwitchStmt{
-		Switch: c.convertPos(v.Switch),
-		Init:   c.convertStmt(v.Init),
-		Assign: c.convertStmt(v.Assign),
-		Body:   c.convertBlockStmt(v.Body),
+		c.convertStmt(v)
 	}
 }
 
-func (c *converter) convertCaseClause(v *ast.CaseClause) *goast.CaseClause {
+func (c *converter) convertTypeSwitchStmt(v *ast.TypeSwitchStmt) {
 	if v == nil {
-		return nil
+		return
 	}
-	ret := &goast.CaseClause{}
-	ret.Case = c.convertPos(v.Case)
+
+	c.convertStmt(v.Init)
+	c.convertStmt(v.Assign)
+	c.convertBlockStmt(v.Body)
+}
+
+func (c *converter) convertCaseClause(v *ast.CaseClause) {
+	if v == nil {
+		return
+	}
 	for _, v := range v.List.List {
-		ret.List = append(ret.List, c.convertExpr(v))
+		c.convertExpr(v)
 	}
-	ret.Colon = c.convertPos(v.Colon)
 	for _, v := range v.Body {
-		ret.Body = append(ret.Body, c.convertStmt(v))
-	}
-	return ret
-}
-
-func (c *converter) convertIfStmt(v *ast.IfStmt) *goast.IfStmt {
-	if v == nil {
-		return nil
-	}
-	return &goast.IfStmt{
-		If:   c.convertPos(v.If),
-		Init: c.convertStmt(v.Init),
-		Cond: c.convertExpr(v.Cond),
-		Body: c.convertBlockStmt(v.Body),
-		Else: c.convertStmt(v.Else),
+		c.convertStmt(v)
 	}
 }
 
-func (c *converter) convertExpr(v ast.Expr) goast.Expr {
+func (c *converter) convertIfStmt(v *ast.IfStmt) {
 	if v == nil {
-		return nil
+		return
+	}
+
+	c.convertStmt(v.Init)
+	c.convertExpr(v.Cond)
+	c.convertBlockStmt(v.Body)
+	c.convertStmt(v.Else)
+}
+
+func (c *converter) convertExpr(v ast.Expr) {
+	if v == nil {
+		return
 	}
 	switch v := v.(type) {
 	case *ast.StructType:
-		return c.convertStructType(v)
+		c.convertStructType(v)
+		return
 	case *ast.Ident:
-		return c.convertIdent(v)
+		c.convertIdent(v)
+		return
 	case *ast.CallExpr:
-		return c.convertCallExpr(v)
+		c.convertCallExpr(v)
+		return
 	case *ast.StarExpr:
-		return c.convertStarExpr(v)
+		c.convertStarExpr(v)
+		return
 	case *ast.OptionalType:
-		return c.convertOptionalType(v)
+		c.convertOptionalType(v)
+		return
 	case *ast.CompositeLit:
-		return c.convertCompositeLit(v)
+		c.convertCompositeLit(v)
+		return
 	case *ast.UnaryExpr:
-		return c.convertUnaryExpr(v)
+		c.convertUnaryExpr(v)
+		return
 	case *ast.BasicLit:
-		return c.convertBasicLit(v)
+		c.convertBasicLit(v)
+		return
 	case *ast.BinaryExpr:
-		return c.convertBinaryExpr(v)
+		c.convertBinaryExpr(v)
+		return
 	case *ast.SelectorExpr:
-		return c.convertSelectorExpr(v)
+		c.convertSelectorExpr(v)
+		return
 	case *ast.FuncType:
-		return c.convertFuncType(v)
+		c.convertFuncType(v)
+		return
 	case *ast.FuncLit:
-		return c.convertFuncLit(v)
+		c.convertFuncLit(v)
+		return
 	case *ast.InterfaceType:
-		return c.convertInterfaceType(v)
+		c.convertInterfaceType(v)
+		return
 	case *ast.ParenExpr:
-		return c.convertParenExpr(v)
+		c.convertParenExpr(v)
+		return
 	case *ast.TypeAssertExpr:
-		return c.convertTypeAssertExpr(v)
+		c.convertTypeAssertExpr(v)
+		return
 	case *ast.MapType:
-		return c.convertMapType(v)
+		c.convertMapType(v)
+		return
 	case *ast.IndexExpr:
-		return c.convertIndexExpr(v)
+		c.convertIndexExpr(v)
+		return
 	case *ast.KeyValueExpr:
-		return c.convertKeyValueExpr(v)
+		c.convertKeyValueExpr(v)
+		return
 	case *ast.ArrayType:
-		return c.convertArrayType(v)
+		c.convertArrayType(v)
+		return
 	case *ast.BadExpr:
-		return c.convertBadExpr(v)
+		c.convertBadExpr(v)
+		return
 	case *ast.ChanType:
-		return c.convertChanType(v)
+		c.convertChanType(v)
+		return
 	case *ast.Ellipsis:
-		return c.convertEllipsis(v)
+		c.convertEllipsis(v)
+		return
 	case *ast.SliceExpr:
-		return c.convertSliceExpr(v)
+		c.convertSliceExpr(v)
+		return
 	default:
 		panic(fmt.Sprintf("unhandled Expr %T", v))
 	}
 }
 
-func (c *converter) convertIndexExpr(v *ast.IndexExpr) *goast.IndexExpr {
+func (c *converter) convertIndexExpr(v *ast.IndexExpr) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.IndexExpr{
-		X:      c.convertExpr(v.X),
-		Lbrack: c.convertPos(v.Lbrack),
-		Index:  c.convertExpr(v.Index),
-		Rbrack: c.convertPos(v.Rbrack),
-	}
+
+	c.convertExpr(v.X)
+	c.convertExpr(v.Index)
 }
 
-func (c *converter) convertEllipsis(v *ast.Ellipsis) *goast.Ellipsis {
+func (c *converter) convertEllipsis(v *ast.Ellipsis) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.Ellipsis{
-		Ellipsis: c.convertPos(v.Ellipsis),
-		Elt:      c.convertExpr(v.Elt),
-	}
+
+	c.convertExpr(v.Elt)
 }
 
-func (c *converter) convertBadExpr(v *ast.BadExpr) *goast.BadExpr {
+func (c *converter) convertBadExpr(v *ast.BadExpr) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.BadExpr{
-		From: c.convertPos(v.From),
-		To:   c.convertPos(v.To),
-	}
+
 }
 
-func (c *converter) convertArrayType(v *ast.ArrayType) *goast.ArrayType {
+func (c *converter) convertArrayType(v *ast.ArrayType) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.ArrayType{
-		Lbrack: c.convertPos(v.Lbrack),
-		Len:    c.convertExpr(v.Len),
-		Elt:    c.convertExpr(v.Elt),
-	}
+
+	c.convertExpr(v.Len)
+	c.convertExpr(v.Elt)
 }
 
-func (c *converter) convertChanType(v *ast.ChanType) *goast.ChanType {
+func (c *converter) convertChanType(v *ast.ChanType) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.ChanType{
-		Begin: c.convertPos(v.Begin),
-		Arrow: c.convertPos(v.Arrow),
-		Dir:   goast.ChanDir(v.Dir),
-		Value: c.convertExpr(v.Value),
-	}
+
+	c.convertExpr(v.Value)
 }
 
-func (c *converter) convertCallExpr(v *ast.CallExpr) *goast.CallExpr {
+func (c *converter) convertCallExpr(v *ast.CallExpr) {
 	if v == nil {
-		return nil
+		return
 	}
-	ret := &goast.CallExpr{}
-	ret.Fun = c.convertExpr(v.Fun)
-	ret.Lparen = c.convertPos(v.Lparen)
+	c.convertExpr(v.Fun)
 	for _, v := range v.Args {
-		ret.Args = append(ret.Args, c.convertExpr(v))
-	}
-	ret.Ellipsis = c.convertPos(v.Ellipsis)
-	ret.Rparen = c.convertPos(v.Rparen)
-	return ret
-}
-
-func (c *converter) convertStarExpr(v *ast.StarExpr) *goast.StarExpr {
-	if v == nil {
-		return nil
-	}
-	return &goast.StarExpr{
-		Star: c.convertPos(v.Star),
-		X:    c.convertExpr(v.X),
+		c.convertExpr(v)
 	}
 }
 
-func (c *converter) convertSelectorExpr(v *ast.SelectorExpr) *goast.SelectorExpr {
+func (c *converter) convertStarExpr(v *ast.StarExpr) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.SelectorExpr{
-		X:   c.convertExpr(v.X),
-		Sel: c.convertIdent(v.Sel),
-	}
+
+	c.convertExpr(v.X)
 }
 
-func (c *converter) convertParenExpr(v *ast.ParenExpr) *goast.ParenExpr {
+func (c *converter) convertSelectorExpr(v *ast.SelectorExpr) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.ParenExpr{
-		Lparen: c.convertPos(v.Lparen),
-		X:      c.convertExpr(v.X),
-		Rparen: c.convertPos(v.Rparen),
-	}
+
+	c.convertExpr(v.X)
+	c.convertIdent(v.Sel)
 }
 
-func (c *converter) convertTypeAssertExpr(v *ast.TypeAssertExpr) *goast.TypeAssertExpr {
+func (c *converter) convertParenExpr(v *ast.ParenExpr) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.TypeAssertExpr{
-		X:      c.convertExpr(v.X),
-		Lparen: c.convertPos(v.Lparen),
-		Type:   c.convertExpr(v.Type),
-		Rparen: c.convertPos(v.Rparen),
-	}
+
+	c.convertExpr(v.X)
 }
 
-func (c *converter) convertMapType(v *ast.MapType) *goast.MapType {
+func (c *converter) convertTypeAssertExpr(v *ast.TypeAssertExpr) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.MapType{
-		Map:   c.convertPos(v.Map),
-		Key:   c.convertExpr(v.Key),
-		Value: c.convertExpr(v.Value),
-	}
+
+	c.convertExpr(v.X)
+	c.convertExpr(v.Type)
 }
 
-func (c *converter) convertSliceExpr(v *ast.SliceExpr) *goast.SliceExpr {
+func (c *converter) convertMapType(v *ast.MapType) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.SliceExpr{
-		X:      c.convertExpr(v.X),
-		Lbrack: c.convertPos(v.Lbrack),
-		Low:    c.convertExpr(v.Low),
-		High:   c.convertExpr(v.High),
-		Max:    c.convertExpr(v.Max),
-		Slice3: v.Slice3,
-		Rbrack: c.convertPos(v.Rbrack),
-	}
+
+	c.convertExpr(v.Key)
+	c.convertExpr(v.Value)
 }
 
-func (c *converter) convertKeyValueExpr(v *ast.KeyValueExpr) *goast.KeyValueExpr {
+func (c *converter) convertSliceExpr(v *ast.SliceExpr) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.KeyValueExpr{
-		Key:   c.convertExpr(v.Key),
-		Colon: c.convertPos(v.Colon),
-		Value: c.convertExpr(v.Value),
-	}
+
+	c.convertExpr(v.X)
+	c.convertExpr(v.Low)
+	c.convertExpr(v.High)
+	c.convertExpr(v.Max)
 }
 
-func (c *converter) convertExprStmt(v *ast.ExprStmt) *goast.ExprStmt {
+func (c *converter) convertKeyValueExpr(v *ast.KeyValueExpr) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.ExprStmt{
-		X: c.convertExpr(v.X),
-	}
+
+	c.convertExpr(v.Key)
+	c.convertExpr(v.Value)
 }
 
-func (c *converter) convertOptionalType(v *ast.OptionalType) goast.Expr {
+func (c *converter) convertExprStmt(v *ast.ExprStmt) {
 	if v == nil {
-		return nil
+		return
 	}
-	return c.convertExpr(v.Elt)
+
+	c.convertExpr(v.X)
 }
 
-func (c *converter) convertUnaryExpr(v *ast.UnaryExpr) *goast.UnaryExpr {
+func (c *converter) convertOptionalType(v *ast.OptionalType) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.UnaryExpr{
-		OpPos: c.convertPos(v.OpPos),
-		Op:    c.convertToken(v.Op),
-		X:     c.convertExpr(v.X),
-	}
+	c.putChunks(int(v.Pos()), c.src[c.lastChunkEnd:int(v.Pos())-1-c.base])
+	c.convertExpr(v.Elt)
 }
 
-func (c *converter) convertBinaryExpr(v *ast.BinaryExpr) *goast.BinaryExpr {
+func (c *converter) convertUnaryExpr(v *ast.UnaryExpr) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.BinaryExpr{
-		X:     c.convertExpr(v.X),
-		OpPos: c.convertPos(v.OpPos),
-		Op:    c.convertToken(v.Op),
-		Y:     c.convertExpr(v.Y),
-	}
+
+	c.convertExpr(v.X)
 }
 
-func (c *converter) convertCompositeLit(v *ast.CompositeLit) *goast.CompositeLit {
+func (c *converter) convertBinaryExpr(v *ast.BinaryExpr) {
 	if v == nil {
-		return nil
+		return
 	}
-	ret := &goast.CompositeLit{}
-	ret.Type = c.convertExpr(v.Type)
-	ret.Lbrace = c.convertPos(v.Lbrace)
+
+	c.convertExpr(v.X)
+	c.convertExpr(v.Y)
+}
+
+func (c *converter) convertCompositeLit(v *ast.CompositeLit) {
+	if v == nil {
+		return
+	}
+	c.convertExpr(v.Type)
 	for _, v := range v.Elts {
-		ret.Elts = append(ret.Elts, c.convertExpr(v))
-	}
-	ret.Rbrace = c.convertPos(v.Rbrace)
-	return ret
-}
-
-func (c *converter) convertStructType(v *ast.StructType) *goast.StructType {
-	if v == nil {
-		return nil
-	}
-	return &goast.StructType{
-		Struct:     c.convertPos(v.Struct),
-		Fields:     c.convertFieldList(v.Fields),
-		Incomplete: v.Incomplete,
+		c.convertExpr(v)
 	}
 }
 
-func (c *converter) convertFieldList(v *ast.FieldList) *goast.FieldList {
+func (c *converter) convertStructType(v *ast.StructType) {
 	if v == nil {
-		return nil
+		return
 	}
-	ret := &goast.FieldList{}
-	ret.Opening = c.convertPos(v.Opening)
+
+	c.convertFieldList(v.Fields)
+}
+
+func (c *converter) convertFieldList(v *ast.FieldList) {
+	if v == nil {
+		return
+	}
 	for _, v := range v.List {
-		ret.List = append(ret.List, c.convertField(v))
+		c.convertField(v)
 	}
 	if v.Entangled != nil {
-		ret.List = append(ret.List, c.convertField(v.Entangled))
+		entangledEnd := int(v.List[len(v.List)-1].End()-1) - c.base
+		c.putChunks(int(v.Entangled.Pos()-1), c.src[c.lastChunkEnd:entangledEnd], []byte{',', ' '})
+		c.convertField(v.Entangled)
 	}
-	ret.Closing = c.convertPos(v.Closing)
-	return ret
 }
 
-func (c *converter) convertField(v *ast.Field) *goast.Field {
+func (c *converter) convertField(v *ast.Field) {
 	if v == nil {
-		return nil
+		return
 	}
-	ret := &goast.Field{}
-	ret.Doc = c.convertCommentGroup(v.Doc)
 	for _, v := range v.Names {
-		ret.Names = append(ret.Names, c.convertIdent(v))
+		c.convertIdent(v)
 	}
-	ret.Type = c.convertExpr(v.Type)
-	ret.Tag = c.convertBasicLit(v.Tag)
-	ret.Comment = c.convertCommentGroup(v.Comment)
-	return ret
+	c.convertExpr(v.Type)
+	c.convertBasicLit(v.Tag)
 }
 
-func (c *converter) convertBasicLit(v *ast.BasicLit) *goast.BasicLit {
+func (c *converter) convertBasicLit(v *ast.BasicLit) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.BasicLit{
-		ValuePos: c.convertPos(v.ValuePos),
-		Kind:     c.convertToken(v.Kind),
-		Value:    v.Value,
-	}
+
 }
 
-func (c *converter) convertIdent(v *ast.Ident) *goast.Ident {
+func (c *converter) convertIdent(v *ast.Ident) {
 	if v == nil {
-		return nil
-	}
-	return &goast.Ident{
-		NamePos: c.convertPos(v.NamePos),
-		Name:    v.Name,
+		return
 	}
 }
 
-func (c *converter) convertFuncLit(v *ast.FuncLit) *goast.FuncLit {
+func (c *converter) convertFuncLit(v *ast.FuncLit) {
 	if v == nil {
-		return nil
+		return
 	}
-	typ, unset := c.setLastFunc(c.Info.TypeOf(v).(*types.Signature), v.Type)
+	unset := c.setLastFunc(c.Info.TypeOf(v).(*types.Signature), v.Type)
 	defer unset()
-	return &goast.FuncLit{
-		Type: typ,
-		Body: c.convertBlockStmt(v.Body),
-	}
+	c.convertFuncType(v.Type)
+	c.convertBlockStmt(v.Body)
 }
 
-func (c *converter) convertInterfaceType(v *ast.InterfaceType) *goast.InterfaceType {
+func (c *converter) convertInterfaceType(v *ast.InterfaceType) {
 	if v == nil {
-		return nil
+		return
 	}
-	return &goast.InterfaceType{
-		Interface:  c.convertPos(v.Interface),
-		Methods:    c.convertFieldList(v.Methods),
-		Incomplete: v.Incomplete,
-	}
+	c.convertFieldList(v.Methods)
 }
 
-func (c *converter) convertToken(v token.Token) gotoken.Token {
-	offset := 0
-	if v > token.QUEST {
-		offset = 1
-		c.posOffset--
-	}
-	return gotoken.Token(int(v) - offset)
-}
-
-func (c *converter) convertPos(v token.Pos) gotoken.Pos {
-	if v == 0 {
-		return 0
-	}
-	line := c.fsetFile.Line(v)
-	newLines := line - c.lastLine
-	c.lastLine = line
-	ret := gotoken.Pos(int(v) + c.posOffset)
-	if newLines > 0 {
-		for i := int(ret) - (newLines - 1); i <= int(ret); i++ {
-			c.lines = append(c.lines, i)
-		}
-	}
-	return ret
-}
-
-func (c *converter) injectedIdent(s string, pos gotoken.Pos) *goast.Ident {
-	ret := goast.NewIdent(s)
-	ret.NamePos = pos
-	c.posOffset += len(s)
-	return ret
-}
-
-func (c *converter) injectedBasicLit(kind gotoken.Token, value string, pos gotoken.Pos) *goast.BasicLit {
-	ret := &goast.BasicLit{Kind: kind, Value: value, ValuePos: pos}
-	c.posOffset += len(value)
-	return ret
+func (c *converter) putChunks(newEnd int, chunks ...[]byte) {
+	c.dstChunks = append(c.dstChunks, chunks...)
+	c.lastChunkEnd = newEnd - c.base
 }
