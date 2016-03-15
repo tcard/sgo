@@ -55,6 +55,7 @@ _ = m["needle"]            // ... would cause a panic if used before initialized
 - [Optional types](#optional-types)
 - [Entangled optionals](#entangled-optionals)
   - [Entangled bools](#entangled-bools)
+  - [Comma-OK assignments](#comma-ok-assignments)
 - [Representation in Go code](#representation-in-go-code)
 - [Zero values of pointers, maps, functions, channels, and interfaces](#zero-values-of-pointers-maps-functions-channels-and-interfaces)
 - [Type assertions](#type-assertions)
@@ -241,7 +242,7 @@ func IndexOf(needle int, haystack []int) (index int \ ok bool) {
 }
 ```
 
-Of course, you can still use the old `. However, this way SGo forces you to get the logic right. For example, you aren't allowed to `return \ true`; and you aren't allowed to use the entangled return values until the associated boolean return value is proven to be true.
+Of course, you can still use the old `(T, bool)` multiple return. However, this way SGo forces you to get the logic right. For example, you aren't allowed to `return \ true`; and you aren't allowed to use the entangled return values until the associated boolean return value is proven to be true.
 
 ### Comma-OK assignments
 
