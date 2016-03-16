@@ -544,7 +544,7 @@ func (check *Checker) convertUntyped(x *operand, target Type) {
 			}
 			target = defaultType(x.typ)
 		}
-	case *Optional:
+	case *Optional, *Slice:
 		if !x.isNil() {
 			goto Error
 		}

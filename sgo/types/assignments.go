@@ -253,7 +253,7 @@ func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Po
 		} else {
 			check.multiExpr(x, rhs.List[i])
 		}
-		if isBoolean(x.typ) && (!isBooleanConst(*x) || constant.BoolVal(x.val) != false) {
+		if rhsIsEntangled && isBoolean(x.typ) && (!isBooleanConst(*x) || constant.BoolVal(x.val) != false) {
 			check.error(rhs.List[i].Pos(), "entangled bool must be the false constant")
 		}
 	}, len(rhs.List), allowCommaOk)

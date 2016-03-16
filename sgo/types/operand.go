@@ -229,7 +229,7 @@ func (x *operand) assignableTo(conf *Config, T Type, reason *string) bool {
 			if t.kind == UnsafePointer {
 				return true
 			}
-		case *Optional:
+		case *Optional, *Slice:
 			return true
 		}
 		return false

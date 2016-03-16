@@ -88,13 +88,16 @@ func (imp *importer) Import(path string) (*types.Package, error) {
 		files = append(files, a)
 	}
 
-	// 1. Typecheck without fromPkg anything; ConvertAST needs to know
+	// 1. Typecheck without converting anything; ConvertAST needs to know
 	//    which idents are types to perform the default conversions.
 
-	info := &types.Info{Uses: map[*ast.Ident]types.Object{}}
+	info := &types.Info{
+		Defs: map[*ast.Ident]types.Object{},
+		Uses: map[*ast.Ident]types.Object{},
+	}
 	cfg := &types.Config{
 		IgnoreFuncBodies:        true,
-		IgnoreTopLevelVarValues: true,
+		IgnoreTopLevelVarValues: false,
 		Importer:                imp.fromPkg(),
 		AllowUninitializedExprs: true,
 	}
