@@ -19,7 +19,7 @@ import (
 	"github.com/tcard/sgo/sgo/types"
 )
 
-func TranslatePaths(paths []string) (warnings []error, errs []error) {
+func TranslatePaths(paths []string) (created []string, warnings []error, errs []error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		errs = append(errs, err)
@@ -33,15 +33,16 @@ func TranslatePaths(paths []string) (warnings []error, errs []error) {
 			errs = append(errs, err)
 			continue
 		}
-
-		errs = append(errs, TranslateDir(pkg.Dir)...)
+		transCreated, transErrs := TranslateDir(pkg.Dir)
+		created = append(created, transCreated...)
+		errs = append(errs, transErrs...)
 	}
-	return warnings, errs
+	return created, warnings, errs
 }
 
-func TranslateDir(dir string) []error {
+func TranslateDir(dir string) ([]string, []error) {
 	var errs []error
-	var named []NamedFile
+	var paths []string
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -50,35 +51,44 @@ func TranslateDir(dir string) []error {
 		if ext != ".sgo" {
 			return nil
 		}
-		f, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		named = append(named, NamedFile{path, f})
+		paths = append(paths, path)
 		return nil
 	})
-	for _, n := range named {
-		defer n.File.(*os.File).Close()
-	}
 	if err != nil {
 		errs = append(errs, err)
-		return errs
+		return nil, errs
+	}
+	return TranslateFilePaths(paths...)
+}
+
+func TranslateFilePaths(paths ...string) ([]string, []error) {
+	var named []NamedFile
+
+	for _, path := range paths {
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, []error{err}
+		}
+		defer f.Close()
+		named = append(named, NamedFile{path, f})
 	}
 
-	translated, transErrs := TranslateFiles(named...)
-	errs = append(errs, transErrs...)
+	translated, errs := TranslateFiles(named...)
 	if len(errs) > 0 {
-		return errs
+		return nil, errs
 	}
 
+	var created []string
 	for i, t := range translated {
 		path := named[i].Path
 		ext := filepath.Ext(path)
-		dst, err := os.Create(path[:len(path)-len(ext)] + ".go")
+		createdPath := path[:len(path)-len(ext)] + ".go"
+		dst, err := os.Create(createdPath)
 		if err != nil {
 			errs = append(errs, err)
 			continue
 		}
+		created = append(created, createdPath)
 		_, err = dst.Write(t)
 		if err != nil {
 			errs = append(errs, err)
@@ -86,7 +96,7 @@ func TranslateDir(dir string) []error {
 		}
 	}
 
-	return errs
+	return created, errs
 }
 
 type NamedFile struct {
