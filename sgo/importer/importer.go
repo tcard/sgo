@@ -97,7 +97,7 @@ func (imp *importer) Import(path string) (*types.Package, error) {
 	}
 	cfg := &types.Config{
 		IgnoreFuncBodies:        true,
-		IgnoreTopLevelVarValues: false,
+		IgnoreTopLevelVarValues: true,
 		Importer:                imp.fromPkg(),
 		AllowUninitializedExprs: true,
 	}
@@ -111,7 +111,7 @@ func (imp *importer) Import(path string) (*types.Package, error) {
 	//    default conversion (wrapping in optionals).
 
 	for _, f := range files {
-		ConvertAST(f, info)
+		ConvertAST(f, info, defaultAnnotations[path])
 	}
 
 	// 3. Typecheck converted AST.

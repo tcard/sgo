@@ -19,6 +19,7 @@ import (
 	"github.com/tcard/sgo/sgo/types"
 )
 
+// For SGo: func(paths []string) (created []string, warnings []error, errs []error)
 func TranslatePaths(paths []string) (created []string, warnings []error, errs []error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -40,20 +41,27 @@ func TranslatePaths(paths []string) (created []string, warnings []error, errs []
 	return created, warnings, errs
 }
 
-func TranslateDir(dir string) ([]string, []error) {
+// For SGo: func(dirName string) ([]string, []error)
+func TranslateDir(dirName string) ([]string, []error) {
 	var errs []error
 	var paths []string
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
+
+	dir, err := os.Open(dirName)
+	if err != nil {
+		return nil, []error{err}
+	}
+	dirPaths, err := dir.Readdirnames(-1)
+	dir.Close()
+	if err != nil {
+		return nil, []error{err}
+	}
+	for _, path := range dirPaths {
 		ext := filepath.Ext(path)
 		if ext != ".sgo" {
-			return nil
+			continue
 		}
 		paths = append(paths, path)
-		return nil
-	})
+	}
 	if err != nil {
 		errs = append(errs, err)
 		return nil, errs
@@ -61,6 +69,7 @@ func TranslateDir(dir string) ([]string, []error) {
 	return TranslateFilePaths(paths...)
 }
 
+// For SGo: func(paths ...string) ([]string, []error)
 func TranslateFilePaths(paths ...string) ([]string, []error) {
 	var named []NamedFile
 
@@ -101,9 +110,11 @@ func TranslateFilePaths(paths ...string) ([]string, []error) {
 
 type NamedFile struct {
 	Path string
+	// For SGo: io.Reader
 	File io.Reader
 }
 
+// For SGo: func(files ...NamedFile) ([][]byte, []error)
 func TranslateFiles(files ...NamedFile) ([][]byte, []error) {
 	var errs []error
 	fset := token.NewFileSet()
@@ -155,6 +166,7 @@ func TranslateFiles(files ...NamedFile) ([][]byte, []error) {
 	return translate(info, srcs, parsed), errs
 }
 
+// For SGo: func(w func() (io.Writer \ error), r io.Reader, filename string) []error
 func TranslateFile(w func() (io.Writer, error), r io.Reader, filename string) []error {
 	gen, errs := TranslateFiles(NamedFile{filename, r})
 	if len(errs) > 0 {
