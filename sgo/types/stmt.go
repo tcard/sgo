@@ -400,8 +400,8 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			// function returns results
 			// (if one, say the first, result parameter is named, all of them are named)
 			if len(s.Results.List) == 0 && res.vars[0].name != "" {
-				if res.entangled != nil {
-					check.errorf(s.Pos(), "empty return statement not allowed with entangled return values")
+				if res.entangled != nil && isBoolean(res.entangled.typ) {
+					check.errorf(s.Pos(), "empty return statement not allowed with entangled bool return values")
 				}
 
 				// spec: "Implementation restriction: A compiler may disallow an empty expression
