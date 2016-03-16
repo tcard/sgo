@@ -935,22 +935,10 @@ func (p *parser) parseReturnParams(scope *ast.Scope) *ast.FieldList {
 			p.error(p.pos, "entangled return with more than one right-hand variable")
 		} else {
 			list := params[0].Names
-			typ := params[0].Type
 			if len(list) > 1 {
 				p.error(p.pos, "entangled return with more than one right-hand variable")
 			}
-			if typ != nil {
-				entangled = &ast.Field{Names: list, Type: typ}
-				// Go spec: The scope of an identifier denoting a function
-				// parameter or result variable is the function body.
-				p.declare(entangled, nil, scope, ast.Var, list...)
-				if v, ok := typ.(*ast.Ident); ok && v.Obj == nil {
-					p.resolve(typ)
-				}
-			} else if len(list) == 1 {
-				p.resolve(list[0])
-				entangled = &ast.Field{Type: list[0]}
-			}
+			entangled = params[0]
 		}
 	}
 

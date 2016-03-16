@@ -116,6 +116,14 @@ func TranslateFiles(files ...NamedFile) ([][]byte, []error) {
 		parsed = append(parsed, file)
 	}
 
+	// Early typecheck, because fileWithAnnotationComments adds lines and
+	// then type errors are reported in the wrong line.
+	_, typeErrs := typecheck("translate", fset, parsed...)
+	if len(typeErrs) > 0 {
+		errs = append(errs, makeErrList(fset, typeErrs))
+		return nil, errs
+	}
+
 	fset = token.NewFileSet() // fileWithAnnotationComments will reparse.
 	for i, p := range parsed {
 		var err error

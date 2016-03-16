@@ -8,9 +8,10 @@ package ast
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/tcard/sgo/sgo/scanner"
 	"github.com/tcard/sgo/sgo/token"
-	"strconv"
 )
 
 type pkgBuilder struct {
