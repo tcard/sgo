@@ -508,7 +508,7 @@ func (check *Checker) builtin(x *operand, call *ast.CallExpr, id builtinId) (_ b
 	case _Recover:
 		// recover() interface{}
 		x.mode = value
-		x.typ = new(Interface)
+		x.typ = NewOptional(new(Interface))
 		if check.Types != nil {
 			check.recordBuiltinType(call.Fun, makeSig(x.typ))
 		}

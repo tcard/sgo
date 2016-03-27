@@ -544,7 +544,15 @@ func (check *Checker) convertUntyped(x *operand, target Type) {
 			}
 			target = defaultType(x.typ)
 		}
-	case *Optional, *Slice:
+	case *Optional:
+		if x.isNil() {
+			// keep nil untyped - see comment for interfaces, above
+			target = Typ[UntypedNil]
+		} else {
+			check.convertUntyped(x, t.elem)
+			return
+		}
+	case *Slice:
 		if !x.isNil() {
 			goto Error
 		}
@@ -1362,7 +1370,15 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 		if x.mode == invalid {
 			goto Error
 		}
-		xtyp, _ := x.typ.Underlying().(*Interface)
+		var xtyp *Interface
+		switch t := x.typ.Underlying().(type) {
+		case *Interface:
+			xtyp = t
+		case *Optional:
+			if IsInterface(t.Elem()) {
+				xtyp = t.Elem().Underlying().(*Interface)
+			}
+		}
 		if xtyp == nil {
 			check.invalidOp(x.pos(), "%s is not an interface", x)
 			goto Error

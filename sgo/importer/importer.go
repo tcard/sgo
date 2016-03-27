@@ -111,7 +111,7 @@ func (imp *importer) Import(path string) (*types.Package, error) {
 	//    default conversion (wrapping in optionals).
 
 	for _, f := range files {
-		ConvertAST(f, info, defaultAnnotations[path])
+		ConvertAST(f, info, NewAnnotation(defaultAnnotations[path]))
 	}
 
 	// 3. Typecheck converted AST.
@@ -368,7 +368,7 @@ func (c *converter) convertTypeName(v *gotypes.TypeName) *types.TypeName {
 	// sets its typ to a *Named referring to itself. So if we get a *TypeName
 	// whose Type() is a *Named whose Obj() is the same *TypeName, we know it
 	// was constructed this way, so we do the same. Otherwise we get into a
-	// infinite recursion fromPkg the *TypeName's type.
+	// infinite recursion converting the *TypeName's type.
 	var typ types.Type
 	if named, ok := v.Type().(*gotypes.Named); !ok || named.Obj() != v {
 		typ = c.convertType(v.Type())
@@ -380,8 +380,9 @@ func (c *converter) convertTypeName(v *gotypes.TypeName) *types.TypeName {
 		v.Name(),
 		typ,
 	)
-	types.NewNamed(ret, nil, nil)
 	c.converted[v] = ret
+	named := types.NewNamed(ret, nil, nil)
+	c.converted[v.Type()] = named
 	return ret
 }
 
@@ -431,11 +432,8 @@ func (c *converter) convertNamed(v *gotypes.Named) *types.Named {
 	if gotypes.Universe.Lookup("error").(*gotypes.TypeName).Type().(*gotypes.Named) == v {
 		return types.Universe.Lookup("error").(*types.TypeName).Type().(*types.Named)
 	}
-	ret := types.NewNamed(
-		c.convertTypeName(v.Obj()),
-		nil,
-		nil,
-	)
+	typeName := c.convertTypeName(v.Obj())
+	ret := typeName.Type().(*types.Named)
 	c.converted[v] = ret
 	for i := 0; i < v.NumMethods(); i++ {
 		ret.AddMethod(c.convertFunc(v.Method(i)))

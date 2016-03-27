@@ -9,6 +9,41 @@ import (
 	"github.com/tcard/sgo/sgo/types"
 )
 
+type Annotation struct {
+	cursor string
+	typ    string
+	anns   map[string]string
+}
+
+func NewAnnotation(anns map[string]string) *Annotation {
+	if anns == nil {
+		return nil
+	}
+	return &Annotation{anns: anns}
+}
+
+func (a *Annotation) Type() (string, bool) {
+	if a == nil {
+		return "", false
+	}
+	return a.typ, a.typ != ""
+}
+
+func (a *Annotation) Lookup(name string) *Annotation {
+	if a == nil || a.anns == nil {
+		return nil
+	}
+	cursor := name
+	if a.cursor != "" {
+		cursor = a.cursor + "." + cursor
+	}
+	v, ok := a.anns[cursor]
+	if ok {
+		return &Annotation{typ: v}
+	}
+	return &Annotation{cursor: cursor, anns: a.anns}
+}
+
 // ConvertAST transforms an imported Go AST applying type annotations found in
 // doc comments.
 //
@@ -45,7 +80,9 @@ func (c *astConverter) convertAST(node ast.Node, ann *Annotation, replace func(e
 		}
 
 	case *ast.StarExpr:
-		replace(&ast.OptionalType{Elt: n})
+		if replace != nil {
+			replace(&ast.OptionalType{Elt: n})
+		}
 		c.convertAST(n.X, ann, func(e ast.Expr) { n.X = e })
 
 	case *ast.Ident:
@@ -107,22 +144,29 @@ func (c *astConverter) convertAST(node ast.Node, ann *Annotation, replace func(e
 		}
 
 	case *ast.MapType:
-		replace(&ast.OptionalType{Elt: n})
+		if replace != nil {
+			replace(&ast.OptionalType{Elt: n})
+		}
 		c.convertAST(n.Key, ann, func(e ast.Expr) { n.Key = e })
 		c.convertAST(n.Value, ann, func(e ast.Expr) { n.Value = e })
 
 	case *ast.ChanType:
-		replace(&ast.OptionalType{Elt: n})
+		if replace != nil {
+			replace(&ast.OptionalType{Elt: n})
+		}
 		c.convertAST(n.Value, ann, func(e ast.Expr) { n.Value = e })
 
 	// Declarations
 	case *ast.ValueSpec:
 		if n.Type != nil {
-			c.convertAST(n.Type, ann.Lookup(n.Names[0].Name), func(e ast.Expr) { n.Type = e })
+			c.convertAST(n.Type, nil, func(e ast.Expr) { n.Type = e })
 		}
 
 	case *ast.TypeSpec:
-		c.convertAST(n.Type, ann.Lookup(n.Name.Name), nil)
+		if n.Type != nil {
+			// c.convertAST(n.Type, ann, func(e ast.Expr) { n.Type = e })
+			c.convertAST(n.Type, ann, nil)
+		}
 
 	case *ast.GenDecl:
 		for _, s := range n.Specs {
@@ -130,9 +174,17 @@ func (c *astConverter) convertAST(node ast.Node, ann *Annotation, replace func(e
 			case *ast.ImportSpec:
 				c.convertAST(s, nil, nil)
 			case *ast.ValueSpec:
-				c.convertAST(s, ann.Lookup(s.Names[0].Name), func(e ast.Expr) { s.Type = e })
+				if replace == nil { // First time.
+					c.convertAST(n, ann.Lookup(s.Names[0].Name), func(e ast.Expr) { s.Type = e })
+				} else { // Second time.
+					c.convertAST(s, ann, replace)
+				}
 			case *ast.TypeSpec:
-				c.convertAST(s, ann.Lookup(s.Name.Name), nil)
+				if replace == nil { // First time.
+					c.convertAST(n, ann.Lookup(s.Name.Name), func(e ast.Expr) { s.Type = e })
+				} else { // Second time.
+					c.convertAST(s, ann, replace)
+				}
 			}
 		}
 
@@ -149,7 +201,18 @@ func (c *astConverter) convertAST(node ast.Node, ann *Annotation, replace func(e
 			case *ast.GenDecl:
 				c.convertAST(d, ann, nil)
 			case *ast.FuncDecl:
-				c.convertAST(d, ann.Lookup(d.Name.Name), func(e ast.Expr) {
+				name := d.Name.Name
+				if d.Recv != nil && len(d.Recv.List) > 0 {
+					switch t := d.Recv.List[0].Type.(type) {
+					case *ast.StarExpr:
+						if id, ok := t.X.(*ast.Ident); ok {
+							name = "(*" + id.Name + ")." + name
+						}
+					case *ast.Ident:
+						name = t.Name + "." + name
+					}
+				}
+				c.convertAST(d, ann.Lookup(name), func(e ast.Expr) {
 					if e, ok := e.(*ast.FuncType); ok {
 						d.Type = e
 					}
@@ -164,8 +227,8 @@ func (c *astConverter) maybeReplace(node ast.Node, ann *Annotation, replace func
 		return false
 	}
 
-	if ann != nil && ann.Type != "" {
-		e, err := parser.ParseExpr(ann.Type)
+	if typ, ok := ann.Type(); ok {
+		e, err := parser.ParseExpr(typ)
 		if err == nil {
 			replace(e)
 			return true

@@ -6,9 +6,10 @@ package scanner
 
 import (
 	"fmt"
-	"github.com/tcard/sgo/sgo/token"
 	"io"
 	"sort"
+
+	"github.com/tcard/sgo/sgo/token"
 )
 
 // In an ErrorList, an error is represented by an *Error.
@@ -34,6 +35,7 @@ func (e Error) Error() string {
 // ErrorList is a list of *Errors.
 // The zero value for an ErrorList is an empty ErrorList ready to use.
 //
+// For SGo: []*Error
 type ErrorList []*Error
 
 // Add adds an Error with given position and error message to an ErrorList.

@@ -194,7 +194,7 @@ func (obj *Var) setType(typ Type) {
 	if !obj.isField {
 		obj.usable = startsUsable(typ)
 		if debugUsable {
-			fmt.Println("USABLE (*Var).setType:", obj.name, fmt.Sprintf("%p", obj), obj.usable)
+			fmt.Println("USABLE (*Var).setType:", obj.name, fmt.Sprintf("%p", obj), typ, obj.usable)
 		}
 	}
 }

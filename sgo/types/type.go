@@ -428,14 +428,18 @@ func NewNamed(obj *TypeName, underlying Type, methods []*Func) *Named {
 		panic("types.NewNamed: underlying type must not be *Named")
 	}
 	typ := &Named{obj: obj, underlying: underlying, methods: methods}
-	if obj.typ == nil {
-		obj.typ = typ
-	}
+	typ.SetObj(obj)
 	return typ
 }
 
 // TypeName returns the type name for the named type t.
 func (t *Named) Obj() *TypeName { return t.obj }
+func (t *Named) SetObj(obj *TypeName) {
+	if obj != nil && obj.typ == nil {
+		obj.typ = t
+	}
+	t.obj = obj
+}
 
 // NumMethods returns the number of explicit methods whose receiver is named type t.
 func (t *Named) NumMethods() int { return len(t.methods) }

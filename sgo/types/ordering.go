@@ -7,8 +7,9 @@
 package types
 
 import (
-	"github.com/tcard/sgo/sgo/ast"
 	"sort"
+
+	"github.com/tcard/sgo/sgo/ast"
 )
 
 // resolveOrder computes the order in which package-level objects

@@ -72,11 +72,11 @@ func main() {
 						}
 					}()
 					w := &bytes.Buffer{}
-					errs := sgo.TranslateFile(func() (io.Writer, error) { return w, nil }, strings.NewReader(msg.Value.(string)), "name")
+					errs := sgo.TranslateFile(func() (io.Writer \ error) { return w \ }, strings.NewReader(msg.Value.(string)), "name")
 					if errs != nil {
 						var errMsgs []string
 						for _, err := range errs {
-							if errs, ok := err.(scanner.ErrorList); ok {
+							if errs \ ok := err.(scanner.ErrorList); ok {
 								for _, err := range errs {
 									errMsgs = append(errMsgs, err.Error())
 								}
@@ -109,12 +109,12 @@ func main() {
 						}
 					}()
 
-					errs = sgo.TranslateFile(func() (io.Writer, error) { return w, nil }, strings.NewReader(msg.Value.(string)), "name")
+					errs = sgo.TranslateFile(func() (io.Writer \ error) { return w \ }, strings.NewReader(msg.Value.(string)), "name")
 				}()
 				if errs != nil {
 					var errMsgs []string
 					for _, err := range errs {
-						if errs, ok := err.(scanner.ErrorList); ok {
+						if errs \ ok := err.(scanner.ErrorList); ok {
 							for _, err := range errs {
 								errMsgs = append(errMsgs, err.Error())
 							}
@@ -125,11 +125,11 @@ func main() {
 					resp.Value = strings.Join(errMsgs, "\n")
 				} else {
 					body.Add("body", w.String())
-					postResp, err := http.PostForm("http://play.golang.org/compile", body)
+					postResp \ err := http.PostForm("http://play.golang.org/compile", body)
 					if err != nil {
 						resp.Value = err.Error()
 					} else {
-						var v interface{}
+						var v ?interface{}
 						err := json.NewDecoder(postResp.Body).Decode(&v)
 						postResp.Body.Close()
 						if err != nil {
@@ -145,7 +145,7 @@ func main() {
 	}()
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, req *http.Request) {
-		c, err := upgrader.Upgrade(w, req, nil)
+		c \ err := upgrader.Upgrade(w, req, nil)
 		if err != nil {
 			log.Println("upgrade:", err)
 			return
@@ -183,11 +183,9 @@ func main() {
 }
 
 type msgType struct {
-	// For SGo: string
 	Type  string       `json:"type"`
-	// For SGo: ?interface{}
-	Value interface{} `json:"value"`
-	c     *websocket.Conn
+	Value ?interface{} `json:"value"`
+	c     ?*websocket.Conn
 }
 
 const defaultPreloadedCode = `package main

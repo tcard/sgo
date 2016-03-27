@@ -50,17 +50,17 @@ func TranslateDir(dirName string) ([]string, []error) {
 	if err != nil {
 		return nil, []error{err}
 	}
-	dirPaths, err := dir.Readdirnames(-1)
+	fileNames, err := dir.Readdirnames(-1)
 	dir.Close()
 	if err != nil {
 		return nil, []error{err}
 	}
-	for _, path := range dirPaths {
-		ext := filepath.Ext(path)
+	for _, fileName := range fileNames {
+		ext := filepath.Ext(fileName)
 		if ext != ".sgo" {
 			continue
 		}
-		paths = append(paths, path)
+		paths = append(paths, filepath.Join(dirName, fileName))
 	}
 	if err != nil {
 		errs = append(errs, err)
@@ -119,6 +119,11 @@ func TranslateFiles(files ...NamedFile) ([][]byte, []error) {
 	var errs []error
 	fset := token.NewFileSet()
 
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, []error{err}
+	}
+
 	var parsed []*ast.File
 	var srcs [][]byte
 	for _, named := range files {
@@ -127,8 +132,11 @@ func TranslateFiles(files ...NamedFile) ([][]byte, []error) {
 			errs = append(errs, err)
 			continue
 		}
-
-		file, err := parser.ParseFile(fset, filepath.Base(named.Path), src, parser.ParseComments)
+		relPath, err := filepath.Rel(cwd, named.Path)
+		if err != nil {
+			relPath = named.Path
+		}
+		file, err := parser.ParseFile(fset, relPath, src, parser.ParseComments)
 		if err != nil {
 			errs = append(errs, err)
 			continue

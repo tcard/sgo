@@ -476,7 +476,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			sc = sc.Parent()
 		}
 
-		collapsed := check.handleEffs(effs, false)
+		collapsed := check.handleEffs(effs, false, check.scope)
 
 		check.stmt(inner, s.Body)
 		// The parser produces a correct AST but if it was modified
@@ -509,7 +509,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		}
 
 		if s.Else != nil {
-			collapsed = check.handleEffs(effs, true)
+			collapsed = check.handleEffs(effs, true, check.scope.Parent())
 
 			check.stmt(inner, s.Else)
 
@@ -531,11 +531,26 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		}
 
 		if len(s.Body.List) > 0 {
-			if _, ok := s.Body.List[len(s.Body.List)-1].(*ast.ReturnStmt); ok {
+			lastStmt := s.Body.List[len(s.Body.List)-1]
+			switch lastStmt := lastStmt.(type) {
+			case *ast.ReturnStmt:
 				if debugUsable {
 					fmt.Println("USABLE if.body returns, so simulate that rest of the statements are in else")
 				}
-				check.handleEffs(effs, true)
+				check.handleEffs(effs, true, check.scope.parent)
+			case *ast.ExprStmt:
+				call, ok := lastStmt.X.(*ast.CallExpr)
+				if !ok {
+					break
+				}
+				fun, ok := call.Fun.(*ast.Ident)
+				if !ok || fun.Name != "panic" {
+					break
+				}
+				if debugUsable {
+					fmt.Println("USABLE if.body panics, so simulate that rest of the statements are in else")
+				}
+				check.handleEffs(effs, true, check.scope.parent)
 			}
 		}
 
@@ -982,14 +997,10 @@ func (checker *Checker) ifCondSideEffects(x operand) []ifCondSideEffect {
 	return effs
 }
 
-func (check *Checker) handleEffs(effs []ifCondSideEffect, inElse bool) []*Var {
+func (check *Checker) handleEffs(effs []ifCondSideEffect, inElse bool, sc *Scope) []*Var {
 	var collapsed []*Var
 	for _, eff := range effs {
 		if (!inElse && eff.isNilOrTrue) || (inElse && !eff.isNilOrTrue) {
-			sc := check.scope
-			if inElse {
-				sc = sc.Parent()
-			}
 			_, v := sc.LookupParent(eff.ident.Name, token.NoPos)
 			if v, ok := v.(*Var); ok {
 				for _, c := range v.collapses {
@@ -1003,13 +1014,20 @@ func (check *Checker) handleEffs(effs []ifCondSideEffect, inElse bool) []*Var {
 				}
 			}
 		} else {
-			newVar := NewVar(-1, check.pkg, eff.ident.Name, eff.typ)
-			newVar.usable = true
-			if debugUsable {
-				fmt.Println("USABLE if-else unwrapped var:", fmt.Sprintf("(inElse: %v)", inElse), newVar.name, fmt.Sprintf("%p", newVar), newVar.usable)
+			var va *Var
+			if v, ok := sc.Lookup(eff.ident.Name).(*Var); ok {
+				v.setType(eff.typ)
+				va = v
+			} else {
+				newVar := NewVar(-1, check.pkg, eff.ident.Name, eff.typ)
+				check.scope.Insert(newVar)
+				va = newVar
 			}
-			newVar.used = true
-			check.scope.Insert(newVar)
+			va.usable = true
+			va.used = true
+			if debugUsable {
+				fmt.Println("USABLE if-else unwrapped var:", fmt.Sprintf("(inElse: %v)", inElse), va.name, fmt.Sprintf("%p", va), va.usable)
+			}
 		}
 	}
 	return collapsed
