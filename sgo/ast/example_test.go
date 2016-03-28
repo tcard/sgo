@@ -1,5 +1,3 @@
-// +build disabled
-
 // Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -9,6 +7,7 @@ package ast_test
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/format"
 	"github.com/tcard/sgo/sgo/parser"
