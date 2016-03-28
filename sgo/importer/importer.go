@@ -11,6 +11,7 @@ import (
 	goconstant "go/constant"
 	goimporter "go/importer"
 	gotypes "go/types"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +31,7 @@ import (
 // by passing the AST through ConvertAST. The packages that imported packages
 // import themselves are imported by the default go/importer, without
 // transformation to SGo at all, unless they're also imported by those files.
-func Default(files []*ast.File) types.Importer {
+func Default(files []*ast.File, whence string) (types.Importer, error) {
 	visiblePaths := map[string]struct{}{}
 	for _, file := range files {
 		for _, decl := range file.Decls {
@@ -48,15 +49,32 @@ func Default(files []*ast.File) types.Importer {
 		}
 	}
 
-	return &importer{
-		imported:     map[string]*types.Package{},
-		visiblePaths: visiblePaths,
-	}
+	return newImporter(visiblePaths, whence)
 }
 
 type importer struct {
-	imported     map[string]*types.Package
 	visiblePaths map[string]struct{}
+
+	imported    map[string]*types.Package
+	sgovendored map[string]func() (*annotations.Annotation, error)
+}
+
+func newImporter(visiblePaths map[string]struct{}, whence string) (*importer, error) {
+	sgovendored := map[string]func() (*annotations.Annotation, error){}
+
+	if whence != "" {
+		err := findSgovendoredPkgs(whence, sgovendored)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &importer{
+		visiblePaths: visiblePaths,
+
+		imported:    map[string]*types.Package{},
+		sgovendored: sgovendored,
+	}, nil
 }
 
 func (imp *importer) fromPkg() types.Importer {
@@ -111,8 +129,18 @@ func (imp *importer) Import(path string) (*types.Package, error) {
 	//    everything that hasn't been converted explicitly by then with the
 	//    default conversion (wrapping in optionals).
 
+	var ann *annotations.Annotation
+	if a, ok := defaultAnnotations[path]; ok {
+		ann = annotations.NewAnnotation(a)
+	} else if a, ok := imp.sgovendored[path]; ok {
+		ann, err = a()
+		if err != nil {
+			return nil, fmt.Errorf("reading SGo annotations for %s: %v", path, err)
+		}
+	}
+
 	for _, f := range files {
-		ConvertAST(f, info, annotations.NewAnnotation(defaultAnnotations[path]))
+		ConvertAST(f, info, ann)
 	}
 
 	// 3. Typecheck converted AST.
@@ -589,4 +617,94 @@ func (c *converter) convertConstantValue(v goconstant.Value) constant.Value {
 	}
 	c.converted[v] = ret
 	return ret
+}
+
+func findSgovendoredPkgs(whence string, sgovendored map[string]func() (*annotations.Annotation, error)) error {
+	dirPath, err := filepath.Abs(whence)
+	if err != nil {
+		return err
+	}
+
+	annPaths := map[string]string{}
+
+	for {
+		dir, err := os.Open(dirPath)
+		if err != nil {
+			return err
+		}
+		fileNames, err := dir.Readdirnames(-1)
+		dir.Close()
+		if err != nil {
+			return err
+		}
+		for _, sgovendorPath := range fileNames {
+			if sgovendorPath != "sgovendor" {
+				continue
+			}
+			sgovendorPath = filepath.Join(dirPath, sgovendorPath)
+			info, err := os.Lstat(sgovendorPath)
+			if err != nil {
+				return err
+			}
+			if !info.IsDir() {
+				continue
+			}
+
+			filepath.Walk(sgovendorPath, func(path string, info os.FileInfo, err error) error {
+				if info.IsDir() || filepath.Ext(path) != ".sgoann" {
+					return nil
+				}
+				pkgPath := filepath.Dir(path[len(sgovendorPath)+1:])
+				if _, ok := annPaths[pkgPath]; ok {
+					return nil
+				}
+				annPaths[pkgPath] = filepath.Dir(path)
+				return nil
+			})
+		}
+
+		nextDirPath := filepath.Dir(dirPath)
+		if nextDirPath == dirPath {
+			break
+		}
+		dirPath = nextDirPath
+	}
+
+	for pkgPath, dirPath := range annPaths {
+		sgovendored[pkgPath] = func() (*annotations.Annotation, error) {
+			return readSgovendorDir(dirPath)
+		}
+	}
+
+	return nil
+}
+
+func readSgovendorDir(dirPath string) (*annotations.Annotation, error) {
+	dir, err := os.Open(dirPath)
+	if err != nil {
+		return nil, err
+	}
+	fileNames, err := dir.Readdirnames(-1)
+	dir.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	var allSrc string
+
+	for _, fileName := range fileNames {
+		if filepath.Ext(fileName) != ".sgoann" {
+			continue
+		}
+
+		// TODO: Cache this maybe?
+		src, err := ioutil.ReadFile(filepath.Join(dirPath, fileName))
+		if err != nil {
+			return nil, err
+		}
+
+		allSrc += "\n" + string(src)
+	}
+
+	return annotations.Parse(allSrc)
 }

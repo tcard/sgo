@@ -66,11 +66,16 @@ func TranslateDir(dirName string) ([]string, []error) {
 		errs = append(errs, err)
 		return nil, errs
 	}
-	return TranslateFilePaths(paths...)
+	return TranslateFilePathsFrom(dirName, paths...)
 }
 
 // For SGo: func(paths ...string) ([]string, []error)
 func TranslateFilePaths(paths ...string) ([]string, []error) {
+	return TranslateFilePathsFrom("", paths...)
+}
+
+// For SGo: func(whence string, paths ...string) ([]string, []error)
+func TranslateFilePathsFrom(whence string, paths ...string) ([]string, []error) {
 	var named []NamedFile
 
 	for _, path := range paths {
@@ -82,7 +87,7 @@ func TranslateFilePaths(paths ...string) ([]string, []error) {
 		named = append(named, NamedFile{path, f})
 	}
 
-	translated, errs := TranslateFiles(named...)
+	translated, errs := TranslateFilesFrom(whence, named...)
 	if len(errs) > 0 {
 		return nil, errs
 	}
@@ -116,6 +121,11 @@ type NamedFile struct {
 
 // For SGo: func(files ...NamedFile) ([][]byte, []error)
 func TranslateFiles(files ...NamedFile) ([][]byte, []error) {
+	return TranslateFilesFrom("", files...)
+}
+
+// For SGo: func(whence string, files ...NamedFile) ([][]byte, []error)
+func TranslateFilesFrom(whence string, files ...NamedFile) ([][]byte, []error) {
 	var errs []error
 	fset := token.NewFileSet()
 
@@ -147,7 +157,7 @@ func TranslateFiles(files ...NamedFile) ([][]byte, []error) {
 
 	// Early typecheck, because fileWithAnnotationComments adds lines and
 	// then type errors are reported in the wrong line.
-	_, typeErrs := typecheck("translate", fset, parsed...)
+	_, typeErrs := typecheck("translate", fset, whence, parsed...)
 	if len(typeErrs) > 0 {
 		errs = append(errs, makeErrList(fset, typeErrs))
 		return nil, errs
@@ -165,7 +175,7 @@ func TranslateFiles(files ...NamedFile) ([][]byte, []error) {
 		return nil, errs
 	}
 
-	info, typeErrs := typecheck("translate", fset, parsed...)
+	info, typeErrs := typecheck("translate", fset, whence, parsed...)
 	if len(typeErrs) > 0 {
 		errs = append(errs, makeErrList(fset, typeErrs))
 		return nil, errs
@@ -212,13 +222,17 @@ func makeErrList(fset *token.FileSet, errs []error) scanner.ErrorList {
 	return errList
 }
 
-func typecheck(path string, fset *token.FileSet, sgoFiles ...*ast.File) (*types.Info, []error) {
+func typecheck(path string, fset *token.FileSet, whence string, sgoFiles ...*ast.File) (*types.Info, []error) {
 	var errors []error
+	imp, err := importer.Default(sgoFiles, whence)
+	if err != nil {
+		return nil, []error{err}
+	}
 	cfg := &types.Config{
 		Error: func(err error) {
 			errors = append(errors, err)
 		},
-		Importer: importer.Default(sgoFiles),
+		Importer: imp,
 	}
 	info := &types.Info{
 		Types:      map[ast.Expr]types.TypeAndValue{},
@@ -229,7 +243,7 @@ func typecheck(path string, fset *token.FileSet, sgoFiles ...*ast.File) (*types.
 		Scopes:     map[ast.Node]*types.Scope{},
 		InitOrder:  []*types.Initializer{},
 	}
-	_, err := cfg.Check(path, fset, sgoFiles, info)
+	_, err = cfg.Check(path, fset, sgoFiles, info)
 	if err != nil {
 		return nil, errors
 	}

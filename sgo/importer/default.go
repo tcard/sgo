@@ -33,9 +33,4 @@ var defaultAnnotations = map[string]map[string]string{
 	"flag": {
 		"String": `func(name string, value string, usage string) *string`,
 	},
-
-	// Non-std
-	"github.com/gorilla/websocket": {
-		"(*Upgrader).Upgrade": `func(w http.ResponseWriter, r *http.Request, responseHeader ?http.Header) (*Conn \ error)`,
-	},
 }
