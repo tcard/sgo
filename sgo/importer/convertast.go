@@ -4,45 +4,11 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/tcard/sgo/sgo/annotations"
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/parser"
 	"github.com/tcard/sgo/sgo/types"
 )
-
-type Annotation struct {
-	cursor string
-	typ    string
-	anns   map[string]string
-}
-
-func NewAnnotation(anns map[string]string) *Annotation {
-	if anns == nil {
-		return nil
-	}
-	return &Annotation{anns: anns}
-}
-
-func (a *Annotation) Type() (string, bool) {
-	if a == nil {
-		return "", false
-	}
-	return a.typ, a.typ != ""
-}
-
-func (a *Annotation) Lookup(name string) *Annotation {
-	if a == nil || a.anns == nil {
-		return nil
-	}
-	cursor := name
-	if a.cursor != "" {
-		cursor = a.cursor + "." + cursor
-	}
-	v, ok := a.anns[cursor]
-	if ok {
-		return &Annotation{typ: v}
-	}
-	return &Annotation{cursor: cursor, anns: a.anns}
-}
 
 // ConvertAST transforms an imported Go AST applying type annotations found in
 // doc comments.
@@ -50,7 +16,7 @@ func (a *Annotation) Lookup(name string) *Annotation {
 // It looks up doc comment lines of the form 'For SGO: <annotation>',
 // where <annotation> is a type expression. If found, the annotation replaces
 // the type of the documented declaration or field.
-func ConvertAST(a *ast.File, info *types.Info, ann *Annotation) {
+func ConvertAST(a *ast.File, info *types.Info, ann *annotations.Annotation) {
 	c := astConverter{info: info}
 	c.convertAST(a, ann, nil)
 }
@@ -60,7 +26,7 @@ type astConverter struct {
 	converted map[interface{}]struct{}
 }
 
-func (c *astConverter) convertAST(node ast.Node, ann *Annotation, replace func(e ast.Expr)) {
+func (c *astConverter) convertAST(node ast.Node, ann *annotations.Annotation, replace func(e ast.Expr)) {
 	if replaced := c.maybeReplace(node, ann, replace); replaced {
 		return
 	}
@@ -222,7 +188,7 @@ func (c *astConverter) convertAST(node ast.Node, ann *Annotation, replace func(e
 	}
 }
 
-func (c *astConverter) maybeReplace(node ast.Node, ann *Annotation, replace func(e ast.Expr)) bool {
+func (c *astConverter) maybeReplace(node ast.Node, ann *annotations.Annotation, replace func(e ast.Expr)) bool {
 	if replace == nil {
 		return false
 	}

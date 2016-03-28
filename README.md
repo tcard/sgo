@@ -2,7 +2,7 @@
 
 There's a playground over here: http://fanyare.tcardenas.me:5600
 
-# sgo: a safe Go dialect
+# SGo: a safer Go dialect [![Build Status](https://secure.travis-ci.org/tcard/sgo.svg?branch=master)](http://travis-ci.org/tcard/sgo)
 
 SGo is a dialect of the Go programming language that enhances its type system with **optional types** and **removes nil references**. It is based on idiomatic Go patterns, so SGo code feels familiar, and straightforwarldy compiles to plain Go.
 

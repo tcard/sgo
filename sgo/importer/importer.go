@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/tcard/sgo/sgo/annotations"
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/constant"
 	"github.com/tcard/sgo/sgo/parser"
@@ -111,7 +112,7 @@ func (imp *importer) Import(path string) (*types.Package, error) {
 	//    default conversion (wrapping in optionals).
 
 	for _, f := range files {
-		ConvertAST(f, info, NewAnnotation(defaultAnnotations[path]))
+		ConvertAST(f, info, annotations.NewAnnotation(defaultAnnotations[path]))
 	}
 
 	// 3. Typecheck converted AST.
