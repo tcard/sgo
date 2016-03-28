@@ -135,7 +135,7 @@ func (p *printer) exprList(prev0 token.Pos, list *ast.ExprList, depth int, mode 
 	if prev.IsValid() && prev.Line == line && line == endLine {
 		// all list entries on a single line
 		for i, x := range list.List {
-			if i > 0 && i != list.EntangledPos {
+			if i > 0 {
 				// use position of expression following the comma as
 				// comma position for correct comment placement
 				p.print(x.Pos(), token.COMMA, blank)
@@ -226,11 +226,7 @@ func (p *printer) exprList(prev0 token.Pos, list *ast.ExprList, depth int, mode 
 			if !needsLinebreak {
 				p.print(x.Pos())
 			}
-			if list.EntangledPos == i {
-				p.print(token.BACKSL)
-			} else {
-				p.print(token.COMMA)
-			}
+			p.print(token.COMMA)
 
 			needsBlank := true
 			if needsLinebreak {
@@ -287,9 +283,6 @@ func (p *printer) parameters(fields *ast.FieldList) {
 		prevLine := p.lineFor(fields.Opening)
 		ws := indent
 		list := fields.List
-		if fields.Entangled != nil {
-			list = append(list, fields.Entangled)
-		}
 		for i, par := range list {
 			// determine par begin and end line (may be different
 			// if there are multiple parameter names for this par
@@ -908,7 +901,6 @@ func (p *printer) expr1(expr ast.Expr, prec1, depth int) {
 		p.expr(x.Value)
 
 	case *ast.OptionalType:
-		p.print(token.QUEST)
 		p.expr(x.Elt)
 
 	default:
