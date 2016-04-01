@@ -91,10 +91,10 @@ func pointers() {
 	_ = p == q
 	_ = p != q
 
-	_ = p == nil
-	_ = p != nil
-	_ = nil == q
-	_ = nil != q
+	_ = p == nil /* ERROR cannot convert */
+	_ = p != nil /* ERROR cannot convert nil */
+	_ = nil /* ERROR cannot convert nil */ == q
+	_ = nil /* ERROR cannot convert nil */ != q
 
 	_ = p /* ERROR < not defined */ < q
 	_ = p /* ERROR <= not defined */ <= q
@@ -122,6 +122,43 @@ func pointers() {
 	_ = p1 /* ERROR mismatched types */ == p2
 
 	_ = p1 == ps1
+
+	// optionals
+
+	// basics
+	var op, oq ?*int
+	_ = op == oq
+	_ = op != oq
+
+	_ = op == nil
+	_ = op != nil
+	_ = nil == oq
+	_ = nil != oq
+
+	_ = op /* ERROR < not defined */ < oq
+	_ = op /* ERROR <= not defined */ <= oq
+	_ = op /* ERROR > not defined */ > oq
+	_ = op /* ERROR >= not defined */ >= oq
+
+	// various element types
+	type (
+		OP1 ?*S1
+		OP2 ?*S2
+	)
+	var (
+		ops1 ?*S1
+		ops2 ?*S2
+		op1 P1
+		op2 P2
+	)
+	_ = ops1 == ops1
+	_ = ops1 /* ERROR mismatched types */ == ops2
+	_ = ops2 /* ERROR mismatched types */ == ops1
+
+	_ = op1 == op1
+	_ = op1 /* ERROR mismatched types */ == op2
+
+	_ = op1 == ops1
 }
 
 func channels() {
@@ -129,7 +166,7 @@ func channels() {
 	var c, d chan int
 	_ = c == d
 	_ = c != d
-	_ = c == nil
+	_ = c == nil /* ERROR cannot convert */ 
 	_ = c /* ERROR < not defined */ < d
 
 	// various element types (named types)
@@ -171,6 +208,55 @@ func channels() {
 	_ = d1a == d1
 	_ = d1 /* ERROR mismatched types */ == d2
 	_ = d1a /* ERROR mismatched types */ == d2
+
+	// optionals
+
+		// basics
+	var oc, od ?chan int
+	_ = oc == od
+	_ = oc != od
+	_ = oc == nil
+	_ = oc /* ERROR < not defined */ < od
+
+	// various element types (named types)
+	type (
+		oC1 ?chan int
+		oC1r ?<-chan int
+		oC1s ?chan<- int
+		oC2 ?chan float32
+	)
+	var (
+		oc1 oC1
+		oc1r oC1r
+		oc1s oC1s
+		oc1a ?chan int
+		oc2 oC2
+	)
+	_ = oc1 == oc1
+	_ = oc1 /* ERROR mismatched types */ == oc1r
+	_ = oc1 /* ERROR mismatched types */ == oc1s
+	_ = oc1r /* ERROR mismatched types */ == oc1s
+	_ = oc1 == oc1a
+	_ = oc1a == oc1
+	_ = oc1 /* ERROR mismatched types */ == oc2
+	_ = oc1a /* ERROR mismatched types */ == oc2
+
+	// various element types (unnamed types)
+	var (
+		od1 ?chan int
+		od1r ?<-chan int
+		od1s ?chan<- int
+		od1a ?chan<- int
+		od2 ?chan float32
+	)
+	_ = od1 == od1
+	_ = od1 == od1r
+	_ = od1 == od1s
+	_ = od1r /* ERROR mismatched types */ == od1s
+	_ = od1 == od1a
+	_ = od1a == od1
+	_ = od1 /* ERROR mismatched types */ == od2
+	_ = od1a /* ERROR mismatched types */ == od2
 }
 
 // for interfaces test
@@ -187,7 +273,7 @@ func interfaces() {
 	var i, j interface{ m() int }
 	_ = i == j
 	_ = i != j
-	_ = i == nil
+	_ = i /* ERROR cannot compare */ == nil
 	_ = i /* ERROR < not defined */ < j
 
 	// various interfaces
@@ -208,6 +294,31 @@ func interfaces() {
 
 	_ = i /* ERROR mismatched types */ == s2
 	_ = i /* ERROR mismatched types */ == &s2
+
+	// optionals
+
+	// basics
+	var oi, oj ?interface{ m() int }
+	_ = oi == oj
+	_ = oi != oj
+	_ = oi == nil
+	_ = oi /* ERROR < not defined */ < oj
+
+	// various ?interfaces
+	var oii ?interface { m() int; n() }
+	var ok ?interface { m() float32 }
+	_ = oi == oii
+	_ = oi /* ERROR mismatched types */ == ok
+
+	// ?interfaces vs values
+
+	_ = oi == 0 /* ERROR cannot convert */
+	_ = oi /* ERROR mismatched types */ == s1
+	_ = oi == &s1
+	_ = oi == &s11
+
+	_ = oi /* ERROR mismatched types */ == s2
+	_ = oi /* ERROR mismatched types */ == &s2
 }
 
 func slices() {
@@ -225,23 +336,47 @@ func slices() {
 func maps() {
 	// basics
 	var m map[string]int
-	_ = m == nil
-	_ = m != nil
-	_ = m /* ERROR < not defined */ < nil
+	_ = m == nil /* ERROR cannot convert */
+	_ = m != nil /* ERROR cannot convert */
+	_ = m < nil /* ERROR cannot convert */
 
 	// maps are not otherwise comparable
 	_ = m /* ERROR == not defined */ == m
 	_ = m /* ERROR < not defined */ < m
+
+	// optionals
+
+	// basics
+	var om ?map[string]int
+	_ = om == nil
+	_ = om != nil
+	_ = om /* ERROR < not defined */ < nil
+
+	// maps are not otherwise comparable
+	_ = om /* ERROR == not defined */ == om
+	_ = om /* ERROR < not defined */ < om
 }
 
 func funcs() {
 	// basics
 	var f func(int) float32
-	_ = f == nil
-	_ = f != nil
-	_ = f /* ERROR < not defined */ < nil
+	_ = f == nil /* ERROR cannot convert */
+	_ = f != nil /* ERROR cannot convert */
+	_ = f < nil /* ERROR cannot convert */
 
 	// funcs are not otherwise comparable
 	_ = f /* ERROR == not defined */ == f
 	_ = f /* ERROR < not defined */ < f
+
+	// optionals
+
+	// basics
+	var of ?func(int) float32
+	_ = of == nil
+	_ = of != nil
+	_ = of /* ERROR < not defined */ < nil
+
+	// funcs are not otherwise comparable
+	_ = of /* ERROR == not defined */ == of
+	_ = of /* ERROR < not defined */ < of
 }

@@ -1,5 +1,3 @@
-// +build disabled
-
 // Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -8,11 +6,12 @@ package format
 
 import (
 	"bytes"
-	"github.com/tcard/sgo/sgo/parser"
-	"github.com/tcard/sgo/sgo/token"
 	"io/ioutil"
 	"strings"
 	"testing"
+
+	"github.com/tcard/sgo/sgo/parser"
+	"github.com/tcard/sgo/sgo/token"
 )
 
 const testfile = "format_test.go"

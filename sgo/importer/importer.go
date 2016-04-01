@@ -86,6 +86,17 @@ func (imp *importer) Import(path string) (*types.Package, error) {
 		return imported, nil
 	}
 
+	if path == "unsafe" {
+		gopkg, err := goimporter.Default().Import(path)
+		if err != nil {
+			return nil, err
+		}
+		conv := &converter{gopkg: gopkg}
+		conv.convert()
+		imp.imported[path] = conv.ret
+		return conv.ret, nil
+	}
+
 	buildPkg, err := build.Import(path, "", build.ImportComment)
 	if err != nil {
 		return nil, err

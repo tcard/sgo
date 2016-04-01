@@ -280,7 +280,7 @@ func MissingMethod(V Type, T *Interface, static bool) (method *Func, wrongType b
 // method required by V and whether it is missing or just has the wrong type.
 func assertableTo(V *Interface, T Type) (method *Func, wrongType bool, mustOptional bool) {
 	switch T.Underlying().(type) {
-	case *Pointer, *Map, *Signature, *Chan, *Interface:
+	case *Pointer, *Map, *Signature, *Chan:
 		mustOptional = true
 		return
 	}

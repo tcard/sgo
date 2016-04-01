@@ -108,7 +108,8 @@ func (r T) _(a, b, c int) (u, v, w int) {
 	switch t /* ERROR "declared but not used" */ := t.(type) {
 	case int:
 	case float32, complex64:
-		t = nil
+		var x interface{}
+		t = x
 	}
 
 	switch t := t.(type) {

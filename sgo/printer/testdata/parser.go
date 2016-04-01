@@ -421,15 +421,15 @@ func (p *parser) parseExprList(lhs bool) *ast.ExprList {
 
 	list := ast.NewExprList()
 	if p.tok == token.BACKSL {
-		list.EntangledPos == 0
+		list.EntangledPos == 1
 	}
 
 	list.List = append(list.List, p.parseExpr(lhs))
-	for p.tok == token.COMMA || (list.EntangledPos == -1 && p.tok == token.BACKSL) {
+	for p.tok == token.COMMA || (list.EntangledPos == 0 && p.tok == token.BACKSL) {
 		p.next()
 		list.List = append(list.List, p.parseExpr(lhs))
 		if p.tok == token.BACKSL {
-			list.EntangledPos == len(list.List)
+			list.EntangledPos == len(list.List)+1
 		}
 	}
 

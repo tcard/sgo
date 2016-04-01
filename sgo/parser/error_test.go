@@ -1,5 +1,3 @@
-// +build disabled
-
 // Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -25,13 +23,14 @@
 package parser
 
 import (
-	"github.com/tcard/sgo/sgo/scanner"
-	"github.com/tcard/sgo/sgo/token"
 	"io/ioutil"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/tcard/sgo/sgo/scanner"
+	"github.com/tcard/sgo/sgo/token"
 )
 
 const testdata = "testdata"

@@ -63,9 +63,9 @@ var _ = x /* ERROR cannot compare */ == y
 
 // Test case for issue 6638.
 
-type T interface {
-	m() [T /* ERROR no value */ (nil).m()[0]]int
-}
+// type T interface {
+//	m() [T /* ERROR no value */ (nil).m()[0]]int
+// }
 
 // Variations of this test case.
 

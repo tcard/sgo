@@ -575,21 +575,21 @@ func (p *parser) parseExprList(lhs bool) *ast.ExprList {
 
 	list := ast.NewExprList()
 	if p.tok == token.BACKSL {
-		list.EntangledPos = 0
+		list.EntangledPos = 1
 		p.next()
 	}
 
-	list.List = append(list.List, p.parseExpr(lhs))
-	for p.tok == token.COMMA || (list.EntangledPos == -1 && p.tok == token.BACKSL) {
+	list.List = append(list.List, p.checkExpr(p.parseExpr(lhs)))
+	for p.tok == token.COMMA || (list.EntangledPos == 0 && p.tok == token.BACKSL) {
 		prevTok := p.tok
 		p.next()
 		if prevTok == token.BACKSL {
-			list.EntangledPos = len(list.List)
+			list.EntangledPos = len(list.List) + 1
 			if p.tok == token.SEMICOLON || p.tok == token.RBRACE {
 				break
 			}
 		}
-		list.List = append(list.List, p.parseExpr(lhs))
+		list.List = append(list.List, p.checkExpr(p.parseExpr(lhs)))
 	}
 
 	return list
@@ -851,8 +851,8 @@ func (p *parser) parseParameterList(scope *ast.Scope, ellipsisOk bool) (params [
 	for {
 		list.List = append(list.List, p.parseVarType(ellipsisOk))
 		if p.tok != token.COMMA {
-			if list.EntangledPos == -1 && p.tok == token.BACKSL {
-				list.EntangledPos = len(list.List)
+			if list.EntangledPos == 0 && p.tok == token.BACKSL {
+				list.EntangledPos = len(list.List) + 1
 			}
 			break
 		}
@@ -2364,7 +2364,7 @@ func (p *parser) parseValueSpec(doc *ast.CommentGroup, keyword token.Token, iota
 			p.error(pos, "missing variable type or initialization")
 		}
 	case token.CONST:
-		if values == nil && (iota == 0 || typ != nil) {
+		if (values == nil || len(values.List) == 0) && (iota == 0 || typ != nil) {
 			p.error(pos, "missing constant value")
 		}
 	}

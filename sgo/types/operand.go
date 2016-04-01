@@ -260,6 +260,11 @@ func (x *operand) assignableTo(conf *Config, T Type, reason *string) bool {
 	}
 	// Vu is typed
 
+	if isOptional(Vu) && isOptional(Tu) {
+		Vu = Vu.(*Optional).Elem()
+		Tu = Tu.(*Optional).Elem()
+	}
+
 	// x's type V and T have identical underlying types
 	// and at least one of V or T is not a named type
 	if Identical(Vu, Tu) && (!isNamed(V) || !isNamed(T)) {

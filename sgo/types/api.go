@@ -137,6 +137,11 @@ type Config struct {
 	// have a complete zero value are allowed to not be fully initialized.
 	// This can cause unexpected nil dereferences.
 	AllowUninitializedExprs bool
+
+	// If AllowUseUninitializedVars is set, uninitialized variables can be
+	// used as if they were initialized. This can cause unexpected nil
+	// dereferences.
+	AllowUseUninitializedVars bool
 }
 
 // Info holds result type information for a type-checked package.

@@ -498,7 +498,7 @@ func (c *converter) convertExprList(v *ast.ExprList) {
 		return
 	}
 	for i, expr := range v.List {
-		if i == v.EntangledPos {
+		if i == v.EntangledPos-1 {
 			c.putChunks(int(expr.Pos())-1, c.src[c.lastChunkEnd:int(v.List[i-1].End())-c.base-1], []byte(", "))
 		}
 		c.convertExpr(expr)
@@ -718,7 +718,7 @@ func (c *converter) convertReturnStmt(v *ast.ReturnStmt) {
 	if v == nil {
 		return
 	}
-	if v.Results.EntangledPos == 0 {
+	if v.Results.EntangledPos == 1 {
 		// return \ err
 		resultsLen := c.lastFunc.Results().Len()
 		results := make([][]byte, 0, resultsLen)
@@ -754,7 +754,7 @@ func (c *converter) convertReturnStmt(v *ast.ReturnStmt) {
 	for _, v := range v.Results.List {
 		c.convertExpr(v)
 	}
-	if v.Results.EntangledPos > 0 {
+	if v.Results.EntangledPos > 1 {
 		// return x, y, z \
 		chunk := ", nil"
 		if c.lastFunc.Results().Entangled().Type() == types.Typ[types.Bool] {

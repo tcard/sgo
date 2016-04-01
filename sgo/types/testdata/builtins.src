@@ -93,10 +93,6 @@ func cap1() {
 	_ = cap(c)
 	cap /* ERROR not used */ (c)
 
-	// issue 4744
-	type T struct{ a [10]int }
-	const _ = cap(((*T)(nil)).a)
-
 	var s [][]byte
 	_ = cap(s)
 	_ = cap(s... /* ERROR invalid use of \.\.\. */ )
@@ -376,10 +372,6 @@ func len1() {
 	assert(n == 10) // ok because n has unknown value and no error is reported
 	var ch <-chan int
 	const nn = len /* ERROR not constant */ (hash[<-ch][len(t)])
-
-	// issue 4744
-	type T struct{ a [10]int }
-	const _ = len(((*T)(nil)).a)
 
 	var s [][]byte
 	_ = len(s)

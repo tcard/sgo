@@ -51,7 +51,10 @@ func (check *Checker) arityMatch(s, init *ast.ValueSpec) {
 	l := len(s.Names)
 	r := len(s.Values.List)
 	if init != nil {
-		r = len(init.Values.List)
+		r = 0
+		if init.Values != nil {
+			r = len(init.Values.List)
+		}
 	}
 
 	switch {
@@ -286,7 +289,7 @@ func (check *Checker) collectObjects() {
 								obj := NewConst(name.Pos(), pkg, name.Name, nil, constant.MakeInt64(int64(iota)))
 
 								var init ast.Expr
-								if i < len(last.Values.List) {
+								if last.Values != nil && i < len(last.Values.List) {
 									init = last.Values.List[i]
 								}
 

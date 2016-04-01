@@ -1,5 +1,3 @@
-// +build disabled
-
 // Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -7,9 +5,10 @@
 package parser
 
 import (
-	"github.com/tcard/sgo/sgo/token"
 	"io/ioutil"
 	"testing"
+
+	"github.com/tcard/sgo/sgo/token"
 )
 
 var src = readFile("parser.go")

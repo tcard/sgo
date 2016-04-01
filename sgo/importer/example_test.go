@@ -1,9 +1,10 @@
-// +build disabled
-
 package importer_test
 
 import (
 	"os"
+
+	"github.com/tcard/sgo/sgo/ast"
+	"github.com/tcard/sgo/sgo/types"
 
 	"github.com/tcard/sgo/sgo/importer"
 	"github.com/tcard/sgo/sgo/parser"
@@ -23,7 +24,14 @@ func ExampleConvertAST() {
 	}
 	`, parser.ParseComments)
 
-	importer.ConvertAST(a)
+	info := &types.Info{
+		Defs: map[*ast.Ident]types.Object{},
+		Uses: map[*ast.Ident]types.Object{},
+	}
+	cfg := &types.Config{}
+	cfg.Check("", fset, []*ast.File{a}, info)
+
+	importer.ConvertAST(a, info, nil)
 
 	printer.Fprint(os.Stdout, fset, a)
 	// Output:

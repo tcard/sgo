@@ -13,7 +13,8 @@ type T interface {
 	E
 }
 
-var _ = T.m(nil).m().e()
+var t T
+var _ = T.m(t).m().e()
 
 type E interface {
 	e() int
@@ -22,7 +23,8 @@ type E interface {
 // Check that unresolved forward chains are followed
 // (see also comment in resolver.go, checker.typeDecl).
 
-var _ = C.m(nil).m().e()
+var c C
+var _ = C.m(c).m().e()
 
 type A B
 
@@ -70,7 +72,8 @@ func _(x T1, y T3) {
 // Check that interfaces are type-checked in order of
 // (embedded interface) dependencies (was issue 7158).
 
-var x1 T5 = T7(nil)
+var t7 T7
+var x1 T5 = t7
 
 type T5 interface {
 	T6
@@ -90,7 +93,8 @@ func wrapNode() Node {
 }
 
 func wrapElement() Element {
-	return nil
+	var e Element
+	return e
 }
 
 type EventTarget interface {

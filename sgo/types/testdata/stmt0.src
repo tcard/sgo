@@ -73,9 +73,9 @@ func assignments1() {
 		_ [10]int = nil /* ERROR "untyped nil value" */
 		_ []byte = nil
 		_ struct{} = nil /* ERROR "untyped nil value" */
-		_ func() = nil
-		_ map[int]string = nil
-		_ chan int = nil
+		_ func() = nil /* ERROR "untyped nil value" */
+		_ map[int]string = nil /* ERROR "untyped nil value" */
+		_ chan int = nil /* ERROR "untyped nil value" */
 	)
 
 	// test cases for issue 5500
@@ -482,12 +482,12 @@ func switches0() {
 	type F float64
 	type S string
 	type B bool
-	var i interface{}
+	var i ?interface{}
 	switch i {
 	case nil:
 	case nil: // no duplicate detection
-	case (*int)(nil):
-	case (*int)(nil): // do duplicate detection
+	case (?*int)(nil):
+	case (?*int)(nil): // do duplicate detection
 	case 1:
 	case byte(1):
 	case int /* ERROR duplicate case */ (1):
@@ -513,10 +513,17 @@ func switches0() {
 	// switch on channel
 	var c1, c2 chan int
 	switch c1 {
-	case nil:
 	case c1:
 	case c2:
 	case c1, c2: // no duplicate detection
+	}
+
+	var oc1, oc2 ?chan int
+	switch oc1 {
+	case nil:
+	case oc1:
+	case oc2:
+	case oc1, oc2: // no duplicate detection
 	}
 }
 
@@ -707,7 +714,8 @@ func typeswitches() {
 // Test that each case clause uses the correct type of the variable
 // declared by the type switch (issue 5504).
 func typeswitch0() {
-	switch y := interface{}(nil).(type) {
+	var i interface{}
+	switch y := i.(type) {
 	case int:
 		func() int { return y + 0 }()
 	case float32:
@@ -735,7 +743,8 @@ type B interface { b() }
 type C interface { a(int) }
 
 func typeswitch2() {
-	switch A(nil).(type) {
+	var a A
+	switch a.(type) {
 	case A:
 	case B:
 	case C /* STRICT "cannot have dynamic type" */: // only an error in strict mode (issue 8561)
@@ -758,9 +767,9 @@ func typeswitch3(x interface{}) {
 	type F func(int)
 	switch x.(type) {
 	case nil:
-	case int, func(int):
-	case float32, func /* ERROR duplicate case */ (x int):
-	case F:
+	case int, ?func(int):
+	case float32, ?func /* ERROR duplicate case */ (x int):
+	case ?F:
 	}
 }
 

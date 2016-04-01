@@ -334,7 +334,7 @@ func (N) f() {}
 func map_literals() {
 	type M0 map[string]int
 	type M1 map[bool]int
-	type M2 map[*int]int
+	type M2 map[?*int]int
 
 	_ = M0{}
 	_ = M0{1 /* ERROR "missing key" */ }
@@ -429,7 +429,7 @@ func type_asserts() {
 	var t I
 	_ = t /* ERROR "use of .* outside type switch" */ .(type)
 	_ = t /* ERROR "missing method m" */ .(T)
-	_ = t.(*T)
+	_ = t.(?*T)
 	_ = t /* ERROR "missing method m" */ .(T1)
 	_ = t /* ERROR "wrong type for method m" */ .(T2)
 	_ = t /* STRICT "wrong type for method m" */ .(I2) // only an error in strict mode (issue 8561)

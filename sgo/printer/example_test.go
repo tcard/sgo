@@ -1,5 +1,3 @@
-// +build disabled
-
 // Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -9,12 +7,13 @@ package printer_test
 import (
 	"bytes"
 	"fmt"
+	"strings"
+	"testing"
+
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/parser"
 	"github.com/tcard/sgo/sgo/printer"
 	"github.com/tcard/sgo/sgo/token"
-	"strings"
-	"testing"
 )
 
 // Dummy test function so that godoc does not use the entire file as example.

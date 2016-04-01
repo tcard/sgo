@@ -11,12 +11,13 @@ package printer
 
 import (
 	"bytes"
-	"github.com/tcard/sgo/sgo/ast"
-	"github.com/tcard/sgo/sgo/parser"
 	"io"
 	"io/ioutil"
 	"log"
 	"testing"
+
+	"github.com/tcard/sgo/sgo/ast"
+	"github.com/tcard/sgo/sgo/parser"
 )
 
 var testfile *ast.File

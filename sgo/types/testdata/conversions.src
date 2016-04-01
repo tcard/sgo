@@ -62,23 +62,19 @@ func interface_conversions() {
 	var i3 I3
 
 	_ = E(0)
-	_ = E(nil)
 	_ = E(e)
 	_ = E(i1)
 	_ = E(i2)
 
 	_ = I1(0 /* ERROR "cannot convert" */ )
-	_ = I1(nil)
 	_ = I1(i1)
 	_ = I1(e /* ERROR "cannot convert" */ )
 	_ = I1(i2)
 
-	_ = I2(nil)
 	_ = I2(i1 /* ERROR "cannot convert" */ )
 	_ = I2(i2)
 	_ = I2(i3 /* ERROR "cannot convert" */ )
 
-	_ = I3(nil)
 	_ = I3(i1 /* ERROR "cannot convert" */ )
 	_ = I3(i2 /* ERROR "cannot convert" */ )
 	_ = I3(i3)

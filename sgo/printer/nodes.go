@@ -139,13 +139,13 @@ func (p *printer) exprList(prev0 token.Pos, list *ast.ExprList, depth int, mode 
 				// use position of expression following the comma as
 				// comma position for correct comment placement
 				p.print(x.Pos(), token.COMMA, blank)
-			} else if i == list.EntangledPos {
+			} else if i == list.EntangledPos-1 {
 				p.print(" ")
 				p.print(x.Pos(), token.BACKSL, blank)
 			}
 			p.expr0(x, depth)
 		}
-		if list.EntangledPos == len(list.List) {
+		if list.EntangledPos == len(list.List)+1 {
 			p.print(" ")
 			p.print(token.BACKSL, blank)
 		}
@@ -303,12 +303,7 @@ func (p *printer) parameters(fields *ast.FieldList) {
 				if !needsLinebreak {
 					p.print(par.Pos())
 				}
-				if par == fields.Entangled {
-					p.print(" ")
-					p.print(token.BACKSL)
-				} else {
-					p.print(token.COMMA)
-				}
+				p.print(token.COMMA)
 			}
 			// separator if needed (linebreak or blank)
 			if needsLinebreak && p.linebreak(parLineBeg, 0, ws, true) {
@@ -347,15 +342,12 @@ func (p *printer) parameters(fields *ast.FieldList) {
 }
 
 func (p *printer) signature(params, result *ast.FieldList) {
-	if params != nil {
+	if params != nil && len(params.List) != 0 {
 		p.parameters(params)
 	} else {
 		p.print(token.LPAREN, token.RPAREN)
 	}
 	n := result.NumFields()
-	if result != nil && result.Entangled != nil {
-		n++
-	}
 	if n > 0 {
 		// result != nil
 		p.print(blank)
@@ -901,6 +893,7 @@ func (p *printer) expr1(expr ast.Expr, prec1, depth int) {
 		p.expr(x.Value)
 
 	case *ast.OptionalType:
+		p.print(token.QUEST)
 		p.expr(x.Elt)
 
 	default:
@@ -1170,7 +1163,7 @@ func (p *printer) stmt(stmt ast.Stmt, nextIsRBrace bool) {
 
 	case *ast.ReturnStmt:
 		p.print(token.RETURN)
-		if s.Results != nil {
+		if s.Results != nil && len(s.Results.List) != 0 {
 			p.print(blank)
 			// Use indentList heuristic to make corner cases look
 			// better (issue 1207). A more systematic approach would
@@ -1216,7 +1209,7 @@ func (p *printer) stmt(stmt ast.Stmt, nextIsRBrace bool) {
 		}
 
 	case *ast.CaseClause:
-		if s.List != nil {
+		if s.List != nil && len(s.List.List) != 0 {
 			p.print(token.CASE, blank)
 			p.exprList(s.Pos(), s.List, 1, 0, s.Colon)
 		} else {
@@ -1334,7 +1327,7 @@ func keepTypeColumn(specs []ast.Spec) []bool {
 	var keepType bool
 	for i, s := range specs {
 		t := s.(*ast.ValueSpec)
-		if t.Values != nil {
+		if t.Values != nil && len(t.Values.List) != 0 {
 			if i0 < 0 {
 				// start of a run of ValueSpecs with non-nil Values
 				i0 = i
@@ -1370,7 +1363,7 @@ func (p *printer) valueSpec(s *ast.ValueSpec, keepType bool) {
 	if s.Type != nil {
 		p.expr(s.Type)
 	}
-	if s.Values != nil {
+	if s.Values != nil && len(s.Values.List) != 0 {
 		p.print(vtab, token.ASSIGN, blank)
 		p.exprList(token.NoPos, s.Values, 1, 0, token.NoPos)
 		extraTabs--
@@ -1452,7 +1445,7 @@ func (p *printer) spec(spec ast.Spec, n int, doIndent bool) {
 			p.print(blank)
 			p.expr(s.Type)
 		}
-		if s.Values != nil {
+		if s.Values != nil && len(s.Values.List) != 0 {
 			p.print(blank, token.ASSIGN, blank)
 			p.exprList(token.NoPos, s.Values, 1, 0, token.NoPos)
 		}
@@ -1628,7 +1621,7 @@ func (p *printer) distanceFrom(from token.Pos) int {
 func (p *printer) funcDecl(d *ast.FuncDecl) {
 	p.setComment(d.Doc)
 	p.print(d.Pos(), token.FUNC, blank)
-	if d.Recv != nil {
+	if d.Recv != nil && len(d.Recv.List) != 0 {
 		p.parameters(d.Recv) // method: print receiver
 		p.print(blank)
 	}

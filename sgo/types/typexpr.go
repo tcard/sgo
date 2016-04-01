@@ -33,8 +33,10 @@ func (check *Checker) ident(x *operand, e *ast.Ident, def *Named, path []*TypeNa
 		return
 	}
 
-	if v, ok := obj.(*Var); ok && !v.usable {
-		check.errorf(e.Pos(), "possibly uninitialized variable: %s", e.Name)
+	if !check.conf.AllowUseUninitializedVars {
+		if v, ok := obj.(*Var); ok && !v.usable {
+			check.errorf(e.Pos(), "possibly uninitialized variable: %s", e.Name)
+		}
 	}
 
 	check.recordUse(e, obj)

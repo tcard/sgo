@@ -73,7 +73,7 @@ func (l *ExprList) End() token.Pos {
 }
 
 func NewExprList(list ...Expr) *ExprList {
-	return &ExprList{List: list, EntangledPos: -1}
+	return &ExprList{List: list, EntangledPos: 0}
 }
 
 // All statement nodes implement the Stmt interface.

@@ -358,7 +358,7 @@ func (check *Checker) declStmt(decl ast.Decl) {
 						lhs[i] = obj
 
 						var init ast.Expr
-						if i < len(last.Values.List) {
+						if last.Values != nil && i < len(last.Values.List) {
 							init = last.Values.List[i]
 						}
 

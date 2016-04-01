@@ -30,7 +30,7 @@ var x3p /* ERROR initialization cycle */ = (*T3p).m
 
 type T4p int
 func (*T4p) m() int { _ = x4p; return 0 }
-var x4p /* ERROR initialization cycle */ = (*T4p).m(nil)
+var x4p /* ERROR initialization cycle */ = (*T4p).m(new(T4p))
 
 // cycles through method expressions of embedded methods
 
@@ -52,7 +52,7 @@ var x5p /* ERROR initialization cycle */ = (*T5p).m
 type T6p struct { E6p }
 type E6p int
 func (*E6p) m() int { _ = x6p; return 0 }
-var x6p /* ERROR initialization cycle */ = (*T6p).m(nil)
+var x6p /* ERROR initialization cycle */ = (*T6p).m(new(T6p))
 
 // cycles through method values
 

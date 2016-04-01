@@ -208,7 +208,7 @@ func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Po
 	l := len(lhs)
 
 	rhsIsEntangled := false
-	if rhs.EntangledPos == -1 && len(rhs.List) > 0 {
+	if rhs.EntangledPos == 0 && len(rhs.List) > 0 {
 		var x operand
 		check.rhsMultiExpr(&x, rhs.List[0])
 		if t, ok := x.typ.(*Tuple); ok {
@@ -228,11 +228,11 @@ func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Po
 				l += 1
 			}
 		}
-	} else if rhs.EntangledPos == 0 {
+	} else if rhs.EntangledPos == 1 {
 		// a, b \ c := \ z
 		rhsIsEntangled = true
 		l = 1
-	} else if rhs.EntangledPos == len(rhs.List) {
+	} else if rhs.EntangledPos == len(rhs.List)+1 {
 		// a, b \ c := x, y \
 		rhsIsEntangled = true
 		l = len(lhs)
@@ -301,9 +301,9 @@ func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Po
 		if v == nil {
 			continue
 		}
-		if rhs.EntangledPos == 0 && i != len(lhs) {
+		if rhs.EntangledPos == 1 && i != len(lhs) {
 			continue
-		} else if rhs.EntangledPos == len(lhs) && i == len(lhs) {
+		} else if rhs.EntangledPos == len(lhs)+1 && i == len(lhs) {
 			continue
 		}
 		get(&x, i)
@@ -349,7 +349,7 @@ func (check *Checker) shortVarDecl(pos token.Pos, lhs, rhs *ast.ExprList) {
 	var lhsVars = make([]*Var, 0, len(lhs.List))
 	var entangledLhs *Var
 	for i, lhs := range append(lhs.List) {
-		isEntangled := entangledPos > 0 && i == entangledPos
+		isEntangled := entangledPos > 0 && i == entangledPos-1
 		if isEntangled && lhs == nil {
 			break
 		}

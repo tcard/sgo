@@ -1,5 +1,3 @@
-// +build disabled
-
 // Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -8,10 +6,12 @@ package types_test
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/importer"
 	"github.com/tcard/sgo/sgo/parser"
-	"testing"
+	"github.com/tcard/sgo/sgo/token"
 
 	. "github.com/tcard/sgo/sgo/types"
 )
@@ -87,8 +87,8 @@ var builtinCalls = []struct {
 	{"println", `println(0)`, `func(int)`},
 	{"println", `println(1, 2.0, "foo", true)`, `func(int, float64, string, bool)`},
 
-	{"recover", `recover()`, `func() interface{}`},
-	{"recover", `_ = recover()`, `func() interface{}`},
+	{"recover", `recover()`, `func() ?interface{}`},
+	{"recover", `_ = recover()`, `func() ?interface{}`},
 
 	{"Alignof", `_ = unsafe.Alignof(0)`, `invalid type`},                 // constant
 	{"Alignof", `var x struct{}; _ = unsafe.Alignof(x)`, `invalid type`}, // constant
@@ -127,6 +127,8 @@ func TestBuiltinSignatures(t *testing.T) {
 	}
 }
 
+var fset = token.NewFileSet()
+
 func testBuiltinSignature(t *testing.T, name, src0, want string) {
 	src := fmt.Sprintf(`package p; import "unsafe"; type _ unsafe.Pointer /* use unsafe */; func _() { %s }`, src0)
 	f, err := parser.ParseFile(fset, "", src, 0)
@@ -135,7 +137,12 @@ func testBuiltinSignature(t *testing.T, name, src0, want string) {
 		return
 	}
 
-	conf := Config{Importer: importer.Default()}
+	imp, err := importer.Default([]*ast.File{f}, "")
+	if err != nil {
+		panic("err should be nil")
+	}
+
+	conf := Config{Importer: imp, AllowUseUninitializedVars: true}
 	uses := make(map[*ast.Ident]Object)
 	types := make(map[ast.Expr]TypeAndValue)
 	_, err = conf.Check(f.Name.Name, fset, []*ast.File{f}, &Info{Uses: uses, Types: types})
