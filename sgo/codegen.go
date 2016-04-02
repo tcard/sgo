@@ -224,7 +224,7 @@ func makeErrList(fset *token.FileSet, errs []error) scanner.ErrorList {
 
 func typecheck(path string, fset *token.FileSet, whence string, sgoFiles ...*ast.File) (*types.Info, []error) {
 	var errors []error
-	imp, err := importer.Default(sgoFiles, whence)
+	imp, err := importer.DefaultFrom(sgoFiles, whence)
 	if err != nil {
 		return nil, []error{err}
 	}

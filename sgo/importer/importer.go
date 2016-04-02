@@ -31,7 +31,12 @@ import (
 // by passing the AST through ConvertAST. The packages that imported packages
 // import themselves are imported by the default go/importer, without
 // transformation to SGo at all, unless they're also imported by those files.
-func Default(files []*ast.File, whence string) (types.Importer, error) {
+func Default(files []*ast.File) types.Importer {
+	imp, _ := DefaultFrom(files, "")
+	return imp
+}
+
+func DefaultFrom(files []*ast.File, whence string) (types.Importer, error) {
 	visiblePaths := map[string]struct{}{}
 	for _, file := range files {
 		for _, decl := range file.Decls {
@@ -54,9 +59,9 @@ func Default(files []*ast.File, whence string) (types.Importer, error) {
 
 type importer struct {
 	visiblePaths map[string]struct{}
-
-	imported    map[string]*types.Package
-	sgovendored map[string]func() (*annotations.Annotation, error)
+	imported     map[string]*types.Package
+	sgovendored  map[string]func() (*annotations.Annotation, error)
+	whence       string
 }
 
 func newImporter(visiblePaths map[string]struct{}, whence string) (*importer, error) {
@@ -71,9 +76,9 @@ func newImporter(visiblePaths map[string]struct{}, whence string) (*importer, er
 
 	return &importer{
 		visiblePaths: visiblePaths,
-
-		imported:    map[string]*types.Package{},
-		sgovendored: sgovendored,
+		imported:     map[string]*types.Package{},
+		sgovendored:  sgovendored,
+		whence:       whence,
 	}, nil
 }
 
@@ -82,6 +87,10 @@ func (imp *importer) fromPkg() types.Importer {
 }
 
 func (imp *importer) Import(path string) (*types.Package, error) {
+	return imp.ImportFrom(path, imp.whence, types.ImportMode(build.ImportComment))
+}
+
+func (imp *importer) ImportFrom(path, srcDir string, mode types.ImportMode) (*types.Package, error) {
 	if imported, ok := imp.imported[path]; ok {
 		return imported, nil
 	}
@@ -97,7 +106,7 @@ func (imp *importer) Import(path string) (*types.Package, error) {
 		return conv.ret, nil
 	}
 
-	buildPkg, err := build.Import(path, "", build.ImportComment)
+	buildPkg, err := build.Import(path, srcDir, build.ImportMode(mode))
 	if err != nil {
 		return nil, err
 	}

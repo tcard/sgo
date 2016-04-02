@@ -1,5 +1,3 @@
-// +build disabled
-
 // Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -9,13 +7,14 @@
 package types_test
 
 import (
-	"github.com/tcard/sgo/sgo/ast"
-	"github.com/tcard/sgo/sgo/importer"
-	"github.com/tcard/sgo/sgo/parser"
-	"github.com/tcard/sgo/sgo/token"
-	"github.com/tcard/sgo/sgo/internal/testenv"
 	"strings"
 	"testing"
+
+	"github.com/tcard/sgo/sgo/ast"
+	"github.com/tcard/sgo/sgo/importer"
+	"github.com/tcard/sgo/sgo/internal/testenv"
+	"github.com/tcard/sgo/sgo/parser"
+	"github.com/tcard/sgo/sgo/token"
 
 	. "github.com/tcard/sgo/sgo/types"
 )
@@ -112,7 +111,7 @@ func TestEvalPos(t *testing.T) {
 			x = a + len(s)
 			return float64(x)
 			/* true => true, untyped bool */
-			/* fmt.Println => , func(a ...interface{}) (n int, err error) */
+			/* fmt.Println => , func(a ...interface{}) (n int, err ?error) */
 			/* c => 3, untyped float */
 			/* T => , p.T */
 			/* a => , int */
@@ -163,7 +162,7 @@ func TestEvalPos(t *testing.T) {
 		files = append(files, file)
 	}
 
-	conf := Config{Importer: importer.Default()}
+	conf := Config{Importer: importer.Default(files)}
 	pkg, err := conf.Check("p", fset, files, nil)
 	if err != nil {
 		t.Fatal(err)

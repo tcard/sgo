@@ -28,12 +28,7 @@ func pkgFor(path, source string, info *Info) (*Package, error) {
 		return nil, err
 	}
 
-	imp, err := importer.Default([]*ast.File{f}, "")
-	if err != nil {
-		panic("err should be nil")
-	}
-
-	conf := Config{Importer: imp, AllowUseUninitializedVars: true, AllowUninitializedExprs: true}
+	conf := Config{Importer: importer.Default([]*ast.File{f}), AllowUseUninitializedVars: true, AllowUninitializedExprs: true}
 	return conf.Check(f.Name.Name, fset, []*ast.File{f}, info)
 }
 

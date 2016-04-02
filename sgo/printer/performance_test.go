@@ -1,5 +1,3 @@
-// +build disabled
-
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -18,9 +16,12 @@ import (
 
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/parser"
+	"github.com/tcard/sgo/sgo/token"
 )
 
 var testfile *ast.File
+
+var fset = token.NewFileSet()
 
 func testprint(out io.Writer, file *ast.File) {
 	if err := (&Config{TabIndent | UseSpaces, 8, 0}).Fprint(out, fset, file); err != nil {

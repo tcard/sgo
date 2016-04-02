@@ -137,12 +137,7 @@ func testBuiltinSignature(t *testing.T, name, src0, want string) {
 		return
 	}
 
-	imp, err := importer.Default([]*ast.File{f}, "")
-	if err != nil {
-		panic("err should be nil")
-	}
-
-	conf := Config{Importer: imp, AllowUseUninitializedVars: true}
+	conf := Config{Importer: importer.Default([]*ast.File{f}), AllowUseUninitializedVars: true}
 	uses := make(map[*ast.Ident]Object)
 	types := make(map[ast.Expr]TypeAndValue)
 	_, err = conf.Check(f.Name.Name, fset, []*ast.File{f}, &Info{Uses: uses, Types: types})
