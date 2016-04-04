@@ -80,7 +80,7 @@ func (check *Checker) objDecl(obj Object, def *Named, path []*TypeName) {
 		check.constDecl(obj, d.typ, d.init)
 	case *Var:
 		check.decl = d // new package-level var decl
-		check.varDecl(obj, d.lhs, d.typ, d.init)
+		check.varDecl(obj, d.lhs, d.entangledLhs, d.typ, d.init)
 	case *TypeName:
 		// invalid recursive types are detected via path
 		check.typeDecl(obj, d.typ, def, path)
@@ -128,7 +128,7 @@ func (check *Checker) constDecl(obj *Const, typ, init ast.Expr) {
 	check.initConst(obj, &x)
 }
 
-func (check *Checker) varDecl(obj *Var, lhs []*Var, typ, init ast.Expr) {
+func (check *Checker) varDecl(obj *Var, lhs []*Var, entangledLhs *Var, typ, init ast.Expr) {
 	assert(obj.typ == nil)
 
 	if obj.visited {
@@ -167,7 +167,7 @@ func (check *Checker) varDecl(obj *Var, lhs []*Var, typ, init ast.Expr) {
 		obj.setType(Typ[Invalid])
 	}
 
-	if lhs == nil || len(lhs) == 1 {
+	if lhs == nil || (len(lhs) == 1 && entangledLhs == nil) {
 		assert(lhs == nil || lhs[0] == obj)
 		if shouldCheckRhs {
 			var x operand
@@ -191,7 +191,17 @@ func (check *Checker) varDecl(obj *Var, lhs []*Var, typ, init ast.Expr) {
 		}
 	}
 	if shouldCheckRhs {
-		check.initVars(lhs, &ast.ExprList{List: []ast.Expr{init}}, token.NoPos, nil)
+		check.initVars(lhs, &ast.ExprList{List: []ast.Expr{init}}, token.NoPos, entangledLhs)
+	}
+
+	if entangledLhs != nil {
+		entangledLhs.collapses = lhs
+		for _, v := range lhs {
+			v.usable = false
+			if debugUsable {
+				fmt.Println("USABLE varDecl2:", v.name, fmt.Sprintf("%p", v), v.usable)
+			}
+		}
 	}
 }
 
@@ -352,8 +362,8 @@ func (check *Checker) declStmt(decl ast.Decl) {
 					}
 
 					// declare all constants
-					lhs := make([]*Const, len(s.Names))
-					for i, name := range s.Names {
+					lhs := make([]*Const, len(s.Names.List))
+					for i, name := range s.Names.List {
 						obj := NewConst(name.Pos(), pkg, name.Name, nil, constant.MakeInt64(int64(iota)))
 						lhs[i] = obj
 
@@ -372,14 +382,20 @@ func (check *Checker) declStmt(decl ast.Decl) {
 					// (ShortVarDecl for short variable declarations) and ends at the
 					// end of the innermost containing block."
 					scopePos := s.End()
-					for i, name := range s.Names {
+					for i, name := range s.Names.List {
 						check.declare(check.scope, name, lhs[i], scopePos)
 					}
 
 				case token.VAR:
-					lhs0 := make([]*Var, len(s.Names))
-					for i, name := range s.Names {
-						lhs0[i] = NewVar(name.Pos(), pkg, name.Name, nil)
+					lhs0 := make([]*Var, 0, len(s.Names.List))
+					var entangledLhs *Var
+					for i, name := range s.Names.List {
+						v := NewVar(name.Pos(), pkg, name.Name, nil)
+						if s.Names.EntangledPos > 0 && i == s.Names.EntangledPos-1 {
+							entangledLhs = v
+						} else {
+							lhs0 = append(lhs0, v)
+						}
 					}
 
 					// initialize all variables
@@ -387,7 +403,7 @@ func (check *Checker) declStmt(decl ast.Decl) {
 						var lhs []*Var
 						var init ast.Expr
 						switch len(s.Values.List) {
-						case len(s.Names):
+						case len(s.Names.List):
 							// lhs and rhs match
 							init = s.Values.List[i]
 						case 1:
@@ -399,7 +415,7 @@ func (check *Checker) declStmt(decl ast.Decl) {
 								init = s.Values.List[i]
 							}
 						}
-						check.varDecl(obj, lhs, s.Type, init)
+						check.varDecl(obj, lhs, entangledLhs, s.Type, init)
 						if len(s.Values.List) == 1 {
 							// If we have a single lhs variable we are done either way.
 							// If we have a single rhs expression, it must be a multi-
@@ -420,9 +436,15 @@ func (check *Checker) declStmt(decl ast.Decl) {
 					// declare all variables
 					// (only at this point are the variable scopes (parents) set)
 					scopePos := s.End() // see constant declarations
-					for i, name := range s.Names {
+					for i, name := range s.Names.List {
+						var v *Var
+						if s.Names.EntangledPos > 0 && i == s.Names.EntangledPos-1 {
+							v = entangledLhs
+						} else {
+							v = lhs0[i]
+						}
 						// see constant declarations
-						check.declare(check.scope, name, lhs0[i], scopePos)
+						check.declare(check.scope, name, v, scopePos)
 					}
 
 				default:

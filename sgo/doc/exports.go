@@ -156,8 +156,8 @@ func (r *reader) filterSpec(spec ast.Spec, tok token.Token) bool {
 		// always keep imports so we can collect them
 		return true
 	case *ast.ValueSpec:
-		s.Names = filterIdentList(s.Names)
-		if len(s.Names) > 0 {
+		s.Names.List = filterIdentList(s.Names.List)
+		if len(s.Names.List) > 0 {
 			r.filterType(nil, s.Type)
 			return true
 		}
@@ -204,7 +204,7 @@ func (r *reader) filterSpecList(list []ast.Spec, tok token.Token) []ast.Spec {
 				// provide current spec with an explicit type
 				spec.Type = copyConstType(prevType, spec.Pos())
 			}
-			if hasExportedName(spec.Names) {
+			if hasExportedName(spec.Names.List) {
 				// exported names are preserved so there's no need to propagate the type
 				prevType = nil
 			} else {

@@ -160,8 +160,8 @@ func filterType(typ Expr, f Filter, export bool) bool {
 func filterSpec(spec Spec, f Filter, export bool) bool {
 	switch s := spec.(type) {
 	case *ValueSpec:
-		s.Names = filterIdentList(s.Names, f)
-		if len(s.Names) > 0 {
+		s.Names.List = filterIdentList(s.Names.List, f)
+		if len(s.Names.List) > 0 {
 			if export {
 				filterType(s.Type, f, export)
 			}

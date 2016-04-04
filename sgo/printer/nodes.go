@@ -1354,7 +1354,7 @@ func keepTypeColumn(specs []ast.Spec) []bool {
 
 func (p *printer) valueSpec(s *ast.ValueSpec, keepType bool) {
 	p.setComment(s.Doc)
-	p.identList(s.Names, false) // always present
+	p.identList(s.Names.List, false) // always present
 	extraTabs := 3
 	if s.Type != nil || keepType {
 		p.print(vtab)
@@ -1440,7 +1440,7 @@ func (p *printer) spec(spec ast.Spec, n int, doIndent bool) {
 			p.internalError("expected n = 1; got", n)
 		}
 		p.setComment(s.Doc)
-		p.identList(s.Names, doIndent) // always present
+		p.identList(s.Names.List, doIndent) // always present
 		if s.Type != nil {
 			p.print(blank)
 			p.expr(s.Type)

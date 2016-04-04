@@ -314,8 +314,8 @@ func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte)
 			case *ast.ValueSpec:
 				skipNextSpec = true
 				typ = spec.Type
-				if len(spec.Names) > 0 {
-					name = spec.Names[0]
+				if len(spec.Names.List) > 0 {
+					name = spec.Names.List[0]
 				}
 			}
 			switch typ.(type) {
@@ -353,8 +353,8 @@ func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte)
 				return visitor
 			}
 			typ = node.Type
-			if len(node.Names) > 0 {
-				name = node.Names[0]
+			if len(node.Names.List) > 0 {
+				name = node.Names.List[0]
 			}
 		default:
 			return visitor
@@ -486,7 +486,7 @@ func (c *converter) convertValueSpec(v *ast.ValueSpec) {
 	if v == nil {
 		return
 	}
-	for _, name := range v.Names {
+	for _, name := range v.Names.List {
 		c.convertIdent(name)
 	}
 	c.convertExpr(v.Type)

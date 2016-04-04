@@ -199,10 +199,14 @@ func selects() {
 		_ = t
 	case t := (<-ch):
 		_ = t
-	case t, ok := <-ch:
-		_, _ = t, ok
-	case t, ok := (<-ch):
-		_, _ = t, ok
+	case t \ ok := <-ch:
+		if ok {
+			_ \ _ = t \ ok
+		}
+	case t \ ok := (<-ch):
+		if ok {
+			_ \ _ = t \ ok
+		}
 	case <-sc /* ERROR "cannot receive from send-only channel" */ :
 	}
 	select {
@@ -210,8 +214,10 @@ func selects() {
 	default /* ERROR "multiple defaults" */ :
 	}
 	select {
-	case a, b := <-ch:
-		_, b = a, b
+	case a \ b := <-ch:
+		if b {
+			_ \ b = a \ b
+		}
 	case x /* ERROR send or receive */ :
 	case a /* ERROR send or receive */ := ch:
 	}

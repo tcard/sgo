@@ -7,8 +7,6 @@
 package doc
 
 import (
-	"github.com/tcard/sgo/sgo/ast"
-	"github.com/tcard/sgo/sgo/token"
 	"path"
 	"regexp"
 	"sort"
@@ -16,6 +14,9 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/tcard/sgo/sgo/ast"
+	"github.com/tcard/sgo/sgo/token"
 )
 
 // An Example represents an example function found in a source files.
@@ -157,7 +158,7 @@ func playExample(file *ast.File, body *ast.BlockStmt) *ast.File {
 				case *ast.TypeSpec:
 					topDecls[s.Name.Obj] = true
 				case *ast.ValueSpec:
-					for _, id := range s.Names {
+					for _, id := range s.Names.List {
 						topDecls[id.Obj] = true
 					}
 				}

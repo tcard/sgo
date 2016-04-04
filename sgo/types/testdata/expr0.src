@@ -141,9 +141,9 @@ var (
 	ch7 = <-ch
 	ch8 = <-rc
 	ch9 = <-sc /* ERROR "cannot receive" */
-	ch10, ok = <-ch
+	ch10 \ ok = <-ch
 	// ok is of type bool
-	ch11, myok = <-ch
+	ch11 \ myok = <-ch
 	_ mybool = myok /* ERROR "cannot use .* in variable declaration" */
 )
 

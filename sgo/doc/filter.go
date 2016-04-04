@@ -25,7 +25,7 @@ func matchDecl(d *ast.GenDecl, f Filter) bool {
 	for _, d := range d.Specs {
 		switch v := d.(type) {
 		case *ast.ValueSpec:
-			for _, name := range v.Names {
+			for _, name := range v.Names.List {
 				if f(name.Name) {
 					return true
 				}

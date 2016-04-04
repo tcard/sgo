@@ -304,7 +304,7 @@ func Walk(v Visitor, node Node) {
 		if n.Doc != nil {
 			Walk(v, n.Doc)
 		}
-		walkIdentList(v, n.Names)
+		walkIdentList(v, n.Names.List)
 		if n.Type != nil {
 			Walk(v, n.Type)
 		}

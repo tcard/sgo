@@ -107,7 +107,7 @@ func (obj *Object) Pos() token.Pos {
 		}
 		return d.Path.Pos()
 	case *ValueSpec:
-		for _, n := range d.Names {
+		for _, n := range d.Names.List {
 			if n.Name == name {
 				return n.Pos()
 			}

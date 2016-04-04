@@ -91,7 +91,7 @@ func (check *Checker) isTerminatingSwitch(body *ast.BlockStmt, label string) boo
 	hasDefault := false
 	for _, s := range body.List {
 		cc := s.(*ast.CaseClause)
-		if cc.List == nil {
+		if cc.List.Len() == 0 {
 			hasDefault = true
 		}
 		if !check.isTerminatingList(cc.Body, "") || hasBreakList(cc.Body, label, true) {

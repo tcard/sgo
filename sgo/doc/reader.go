@@ -5,11 +5,12 @@
 package doc
 
 import (
-	"github.com/tcard/sgo/sgo/ast"
-	"github.com/tcard/sgo/sgo/token"
 	"regexp"
 	"sort"
 	"strconv"
+
+	"github.com/tcard/sgo/sgo/ast"
+	"github.com/tcard/sgo/sgo/token"
 )
 
 // ----------------------------------------------------------------------------
@@ -226,7 +227,7 @@ func specNames(specs []ast.Spec) []string {
 	names := make([]string, 0, len(specs)) // reasonable estimate
 	for _, s := range specs {
 		// s guaranteed to be an *ast.ValueSpec by readValue
-		for _, ident := range s.(*ast.ValueSpec).Names {
+		for _, ident := range s.(*ast.ValueSpec).Names.List {
 			names = append(names, ident.Name)
 		}
 	}
@@ -708,7 +709,7 @@ func sortedKeys(m map[string]int) []string {
 func sortingName(d *ast.GenDecl) string {
 	if len(d.Specs) == 1 {
 		if s, ok := d.Specs[0].(*ast.ValueSpec); ok {
-			return s.Names[0].Name
+			return s.Names.List[0].Name
 		}
 	}
 	return ""

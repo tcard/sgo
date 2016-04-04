@@ -2346,9 +2346,18 @@ func (p *parser) parseValueSpec(doc *ast.CommentGroup, keyword token.Token, iota
 	}
 
 	pos := p.pos
-	idents := p.parseIdentList()
-	typ := p.tryType()
+	idents := ast.NewIdentList(p.parseIdentList()...)
+
+	if p.tok == token.BACKSL {
+		p.next()
+		idents.EntangledPos = len(idents.List) + 1
+		idents.List = append(idents.List, p.parseIdent())
+	}
+
 	var values *ast.ExprList
+
+	typ := p.tryType()
+
 	// always permit optional initialization for more tolerant parsing
 	if p.tok == token.ASSIGN {
 		p.next()
@@ -2384,7 +2393,7 @@ func (p *parser) parseValueSpec(doc *ast.CommentGroup, keyword token.Token, iota
 	if keyword == token.VAR {
 		kind = ast.Var
 	}
-	p.declare(spec, iota, p.topScope, kind, idents...)
+	p.declare(spec, iota, p.topScope, kind, idents.List...)
 
 	return spec
 }

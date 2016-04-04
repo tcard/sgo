@@ -91,8 +91,6 @@ var tests = [][]string{
 	{"testdata/blank.src"},
 }
 
-var fset = token.NewFileSet()
-
 // Positioned errors are of the form filename:line:column: message .
 var posMsgRx = regexp.MustCompile(`^(.*:[0-9]+:[0-9]+): *(.*)`)
 
@@ -257,7 +255,7 @@ func checkFiles(t *testing.T, testfiles []string) {
 	if len(testfiles) == 1 && testfiles[0] == "testdata/importC.src" {
 		conf.FakeImportC = true
 	}
-	conf.Importer, _ = importer.Default(files, "")
+	conf.Importer = importer.Default(files)
 	conf.Error = func(err error) {
 		if *listErrors {
 			t.Error(err)

@@ -159,15 +159,19 @@ func TestVarScope(t *testing.T) {
 
 	// RHS refers to undefined globals; LHS does not.
 	as := f.Decls[0].(*ast.FuncDecl).Body.List[0].(*ast.DeclStmt).Decl.(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
-	for _, v := range as.Values.List {
-		id := v.(*ast.Ident)
-		if id.Obj != nil {
-			t.Errorf("rhs %s has Obj, should not", id.Name)
+	if as.Values != nil {
+		for _, v := range as.Values.List {
+			id := v.(*ast.Ident)
+			if id.Obj != nil {
+				t.Errorf("rhs %s has Obj, should not", id.Name)
+			}
 		}
 	}
-	for _, id := range as.Names {
-		if id.Obj == nil {
-			t.Errorf("lhs %s does not have Obj, should", id.Name)
+	if as.Names != nil {
+		for _, id := range as.Names.List {
+			if id.Obj == nil {
+				t.Errorf("lhs %s does not have Obj, should", id.Name)
+			}
 		}
 	}
 }

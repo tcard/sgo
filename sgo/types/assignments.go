@@ -348,7 +348,7 @@ func (check *Checker) shortVarDecl(pos token.Pos, lhs, rhs *ast.ExprList) {
 	var newVars []*Var
 	var lhsVars = make([]*Var, 0, len(lhs.List))
 	var entangledLhs *Var
-	for i, lhs := range append(lhs.List) {
+	for i, lhs := range lhs.List {
 		isEntangled := entangledPos > 0 && i == entangledPos-1
 		if isEntangled && lhs == nil {
 			break

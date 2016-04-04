@@ -36,7 +36,8 @@ var _, _ = g()
 var _, _, _ = g /* ERROR "assignment count mismatch" */ ()
 
 var _ = m["foo"]
-var _, _ = m["foo"]
+var _, _ = m /* ERROR "assignment count mismatch" */ ["foo"]
+var _ \ _ = m["foo"]
 var _, _, _ = m  /* ERROR "assignment count mismatch" */ ["foo"]
 
 var _, _ int = 1, 2
@@ -55,7 +56,8 @@ var (
 	_, _, _ = g /* ERROR "assignment count mismatch" */ ()
 
 	_ = m["foo"]
-	_, _ = m["foo"]
+	_ \ _ = m["foo"]
+	_, _ = m /* ERROR "assignment count mismatch" */ ["foo"]
 	_, _, _ = m /* ERROR "assignment count mismatch" */ ["foo"]
 
 	_, _ int = 1, 2

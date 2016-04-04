@@ -141,7 +141,7 @@ func (c *astConverter) convertAST(node ast.Node, ann *annotations.Annotation, re
 				c.convertAST(s, nil, nil)
 			case *ast.ValueSpec:
 				if replace == nil { // First time.
-					c.convertAST(n, ann.Lookup(s.Names[0].Name), func(e ast.Expr) { s.Type = e })
+					c.convertAST(n, ann.Lookup(s.Names.List[0].Name), func(e ast.Expr) { s.Type = e })
 				} else { // Second time.
 					c.convertAST(s, ann, replace)
 				}

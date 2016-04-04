@@ -76,6 +76,38 @@ func NewExprList(list ...Expr) *ExprList {
 	return &ExprList{List: list, EntangledPos: 0}
 }
 
+// A IdentList represents a list of Idents.
+type IdentList struct {
+	List         []*Ident // expr list; or nil
+	EntangledPos int      // before which item in list there is a '\'
+}
+
+// Len returns the lenght of the list of expressions.
+func (l *IdentList) Len() int {
+	if l == nil {
+		return 0
+	}
+	return len(l.List)
+}
+
+func (l *IdentList) Pos() token.Pos {
+	if l == nil || len(l.List) == 0 {
+		return 0
+	}
+	return l.List[0].Pos()
+}
+
+func (l *IdentList) End() token.Pos {
+	if l == nil || len(l.List) == 0 {
+		return 0
+	}
+	return l.List[len(l.List)-1].End()
+}
+
+func NewIdentList(list ...*Ident) *IdentList {
+	return &IdentList{List: list, EntangledPos: 0}
+}
+
 // All statement nodes implement the Stmt interface.
 type Stmt interface {
 	Node
@@ -884,7 +916,7 @@ type (
 	//
 	ValueSpec struct {
 		Doc     *CommentGroup // associated documentation; or nil
-		Names   []*Ident      // value names (len(Names) > 0)
+		Names   *IdentList    // value names (len(Names.List) > 0)
 		Type    Expr          // value type; or nil
 		Values  *ExprList     // initial values; or nil
 		Comment *CommentGroup // line comments; or nil
@@ -907,7 +939,7 @@ func (s *ImportSpec) Pos() token.Pos {
 	}
 	return s.Path.Pos()
 }
-func (s *ValueSpec) Pos() token.Pos { return s.Names[0].Pos() }
+func (s *ValueSpec) Pos() token.Pos { return s.Names.List[0].Pos() }
 func (s *TypeSpec) Pos() token.Pos  { return s.Name.Pos() }
 
 func (s *ImportSpec) End() token.Pos {
@@ -924,7 +956,7 @@ func (s *ValueSpec) End() token.Pos {
 	if s.Type != nil {
 		return s.Type.End()
 	}
-	return s.Names[len(s.Names)-1].End()
+	return s.Names.List[len(s.Names.List)-1].End()
 }
 func (s *TypeSpec) End() token.Pos { return s.Type.End() }
 
