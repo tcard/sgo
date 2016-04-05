@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/tcard/sgo/sgo"
@@ -36,6 +37,7 @@ func main() {
 			if c == nil {
 				panic("c shouldn't be nil")
 			}
+			time.Sleep(1 * time.Second)
 			switch msg.Type {
 			case "format":
 				resp := &msgType{
@@ -268,6 +270,8 @@ window.addEventListener("load", function(evt) {
 	var shareInput = document.getElementById("share-input");
 	var executed = document.getElementById("executed");
 
+	var receivedTranslation = function() {};
+
 	var ws = new WebSocket("{{.WSURL}}");
 	ws.onmessage = function(ev) {
 		var data = JSON.parse(ev.data);
@@ -297,6 +301,7 @@ window.addEventListener("load", function(evt) {
 				runButton.disabled = false;
 			}
 		} else if (data.type == "translate") {
+			receivedTranslation();
 			translated.textContent = data.value;
 		} else if (data.type == "format") {
 			if (data.value) {
@@ -328,12 +333,29 @@ window.addEventListener("load", function(evt) {
 		formatButton.disabled = true;
 	};
 
-	var translate = function() {
-		ws.send(JSON.stringify({
-			"type": "translate",
-			"value": inputCode.value,
-		}));
-	};
+	var translate = (function() {
+		var sending = false;
+		var waiting = false;
+		return function() {
+			if (sending) {
+				waiting = true;
+				return;
+			}
+
+			sending = true;
+			receivedTranslation = function() {
+				sending = false;
+				if (waiting) {
+					waiting = false;
+					translate();
+				}
+			};
+			ws.send(JSON.stringify({
+				"type": "translate",
+				"value": inputCode.value,
+			}));
+		}
+	})();
 
 	inputCode.onchange = translate;
 	inputCode.onkeyup = translate;
