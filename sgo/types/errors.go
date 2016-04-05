@@ -76,6 +76,15 @@ func (check *Checker) err(pos token.Pos, msg string, soft bool) {
 	if f == nil {
 		panic(bailout{}) // report only first error
 	}
+
+	if check.reportedErrs == nil {
+		check.reportedErrs = map[string]struct{}{}
+	}
+	errMsg := err.Error()
+	if _, ok := check.reportedErrs[errMsg]; ok {
+		return
+	}
+	check.reportedErrs[errMsg] = struct{}{}
 	f(err)
 }
 

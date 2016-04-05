@@ -6,9 +6,8 @@ import (
 	"os"
 	"os/exec"
 
-	"go/scanner"
-
 	"github.com/tcard/sgo/sgo"
+	"github.com/tcard/sgo/sgo/scanner"
 )
 
 func main() {

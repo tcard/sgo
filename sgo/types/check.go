@@ -67,7 +67,8 @@ type Checker struct {
 	fset *token.FileSet
 	pkg  *Package
 	*Info
-	objMap map[Object]*declInfo // maps package-level object to declaration info
+	objMap       map[Object]*declInfo // maps package-level object to declaration info
+	reportedErrs map[string]struct{}
 
 	// information collected during type-checking of a set of package files
 	// (initialized by Files, valid only for the duration of check.Files;

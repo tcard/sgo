@@ -220,6 +220,17 @@ func (x *operand) assignableTo(conf *Config, T Type, reason *string) bool {
 		if x.assignableTo(conf, To.elem, reason) {
 			return true
 		}
+
+		if Vo, ok := Vu.(*Optional); ok {
+			x := &operand{
+				mode: x.mode,
+				expr: x.expr,
+				typ:  Vo.elem,
+				val:  x.val,
+				id:   x.id,
+			}
+			return x.assignableTo(conf, To.elem, reason)
+		}
 	}
 
 	// x is the predeclared identifier nil and T is an optional.
@@ -259,11 +270,6 @@ func (x *operand) assignableTo(conf *Config, T Type, reason *string) bool {
 		}
 	}
 	// Vu is typed
-
-	if isOptional(Vu) && isOptional(Tu) {
-		Vu = Vu.(*Optional).Elem()
-		Tu = Tu.(*Optional).Elem()
-	}
 
 	// x's type V and T have identical underlying types
 	// and at least one of V or T is not a named type

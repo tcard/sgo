@@ -233,8 +233,8 @@ func channels() {
 		oc2 oC2
 	)
 	_ = oc1 == oc1
-	_ = oc1 /* ERROR mismatched types */ == oc1r
-	_ = oc1 /* ERROR mismatched types */ == oc1s
+	_ = oc1 == oc1r
+	_ = oc1 == oc1s
 	_ = oc1r /* ERROR mismatched types */ == oc1s
 	_ = oc1 == oc1a
 	_ = oc1a == oc1
