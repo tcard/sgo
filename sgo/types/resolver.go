@@ -381,6 +381,9 @@ func (check *Checker) collectObjects() {
 					// functions.
 					if list := d.Recv.List; len(list) > 0 {
 						typ := list[0].Type
+						if opt, _ := typ.(*ast.OptionalType); opt != nil {
+							typ = opt.Elt
+						}
 						if ptr, _ := typ.(*ast.StarExpr); ptr != nil {
 							typ = ptr.X
 						}

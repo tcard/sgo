@@ -702,10 +702,8 @@ func (check *Checker) structType(styp *Struct, e *ast.StructType, path []*TypeNa
 			// anonymous field
 			name := anonymousFieldIdent(f.Type)
 			pos := f.Type.Pos()
-			if isOptional(typ) {
-				typ = typ.Underlying().(*Optional).Elem()
-			}
-			t, isPtr := deref(typ)
+			t, _ := deopt(typ)
+			t, isPtr := deref(t)
 			switch t := t.(type) {
 			case *Basic:
 				if t == Typ[Invalid] {

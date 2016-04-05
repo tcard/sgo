@@ -71,7 +71,8 @@ func NewMethodSet(T Type) *MethodSet {
 	// method set up to the current depth, allocated lazily
 	var base methodSet
 
-	typ, isPtr := deref(T)
+	typ, isOpt := deopt(T)
+	typ, isPtr := deref(typ)
 	named, _ := typ.(*Named)
 
 	// *typ where typ is an interface has no methods.
@@ -87,7 +88,7 @@ func NewMethodSet(T Type) *MethodSet {
 
 	// Start with typ as single entry at shallowest depth.
 	// If typ is not a named type, insert a nil type instead.
-	current := []embeddedType{{named, nil, isPtr, false}}
+	current := []embeddedType{{named, nil, isPtr, isOpt, false}}
 
 	// named types that we have seen already, allocated lazily
 	var seen map[*Named]bool
@@ -118,7 +119,17 @@ func NewMethodSet(T Type) *MethodSet {
 				}
 				seen[e.typ] = true
 
-				mset = mset.add(e.typ.methods, e.index, e.indirect, e.multiples)
+				var methods []*Func
+				if isOpt {
+					for _, m := range e.typ.methods {
+						if _, ok := m.typ.(*Signature).recv.typ.(*Optional); ok {
+							methods = append(methods, m)
+						}
+					}
+				} else {
+					methods = e.typ.methods
+				}
+				mset = mset.add(methods, e.index, e.indirect, e.multiples)
 
 				// continue with underlying type
 				typ = e.typ.underlying
@@ -136,9 +147,10 @@ func NewMethodSet(T Type) *MethodSet {
 					if f.anonymous {
 						// Ignore embedded basic types - only user-defined
 						// named types can have methods or struct fields.
-						typ, isPtr := deref(f.typ)
+						typ, isOpt := deopt(f.typ)
+						typ, isPtr := deref(typ)
 						if t, _ := typ.(*Named); t != nil {
-							next = append(next, embeddedType{t, concat(e.index, i), e.indirect || isPtr, e.multiples})
+							next = append(next, embeddedType{t, concat(e.index, i), e.indirect || isPtr, isOpt, e.multiples})
 						}
 					}
 				}
@@ -258,6 +270,13 @@ func (s methodSet) add(list []*Func, index []int, indirect bool, multiples bool)
 func ptrRecv(f *Func) bool {
 	_, isPtr := deref(f.typ.(*Signature).recv.typ)
 	return isPtr
+}
+
+// optRecv reports whether the receiver is of the form ?T.
+// The receiver must exist.
+func optRecv(f *Func) bool {
+	_, isOpt := deopt(f.typ.(*Signature).recv.typ)
+	return isOpt
 }
 
 // byUniqueName function lists can be sorted by their unique names.

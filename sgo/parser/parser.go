@@ -740,7 +740,7 @@ func (p *parser) parseFieldDecl(scope *ast.Scope) *ast.Field {
 		if n := len(list.List); n > 1 {
 			p.errorExpected(p.pos, "type")
 			typ = &ast.BadExpr{From: p.pos, To: p.pos}
-		} else if !isTypeName(deref(typ)) {
+		} else if !isTypeName(deref(deopt(typ))) {
 			p.errorExpected(typ.Pos(), "anonymous field")
 			typ = &ast.BadExpr{From: typ.Pos(), To: p.safePos(typ.End())}
 		}
@@ -1492,6 +1492,14 @@ func isLiteralType(x ast.Expr) bool {
 func deref(x ast.Expr) ast.Expr {
 	if p, isPtr := x.(*ast.StarExpr); isPtr {
 		x = p.X
+	}
+	return x
+}
+
+// If x is of the form ?T, deopt returns T, otherwise it returns x.
+func deopt(x ast.Expr) ast.Expr {
+	if o, isOpt := x.(*ast.OptionalType); isOpt {
+		x = o.Elt
 	}
 	return x
 }
