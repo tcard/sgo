@@ -106,6 +106,18 @@ func (p *printer) identList(identList *ast.IdentList, indent bool) {
 	var list []*ast.Ident
 	if identList != nil {
 		list = identList.List
+		if identList.EntangledPos > 0 {
+			beforeBacklash := list[:identList.EntangledPos-1]
+			list = list[identList.EntangledPos-1:]
+			if len(beforeBacklash) > 0 {
+				p.idents(beforeBacklash, indent)
+				p.print(blank)
+			}
+			p.print(token.BACKSL)
+			if len(list) > 0 {
+				p.print(blank)
+			}
+		}
 	}
 	p.idents(list, indent)
 }
@@ -134,6 +146,18 @@ func (p *printer) exprList(prev0 token.Pos, exprList *ast.ExprList, depth int, m
 	var list []ast.Expr
 	if exprList != nil {
 		list = exprList.List
+		if exprList.EntangledPos > 0 {
+			beforeBacklash := list[:exprList.EntangledPos-1]
+			list = list[exprList.EntangledPos-1:]
+			if len(beforeBacklash) > 0 {
+				p.exprs(prev0, beforeBacklash, depth, mode, next0)
+				p.print(blank)
+			}
+			p.print(token.BACKSL)
+			if len(list) > 0 {
+				p.print(blank)
+			}
+		}
 	}
 	p.exprs(prev0, list, depth, mode, next0)
 }
@@ -290,7 +314,10 @@ func (p *printer) parameters(fields *ast.FieldList) {
 	if len(fields.List) > 0 {
 		prevLine := p.lineFor(fields.Opening)
 		ws := indent
-		for i, par := range fields.List {
+		for i, par := range append(fields.List, fields.Entangled) {
+			if par == nil {
+				continue
+			}
 			// determine par begin and end line (may be different
 			// if there are multiple parameter names for this par
 			// or the type is on a separate line)
@@ -310,7 +337,12 @@ func (p *printer) parameters(fields *ast.FieldList) {
 				if !needsLinebreak {
 					p.print(par.Pos())
 				}
-				p.print(token.COMMA)
+				if par == fields.Entangled {
+					p.print(blank)
+					p.print(token.BACKSL)
+				} else {
+					p.print(token.COMMA)
+				}
 			}
 			// separator if needed (linebreak or blank)
 			if needsLinebreak && p.linebreak(parLineBeg, 0, ws, true) {
@@ -355,6 +387,9 @@ func (p *printer) signature(params, result *ast.FieldList) {
 		p.print(token.LPAREN, token.RPAREN)
 	}
 	n := result.NumFields()
+	if result != nil && result.Entangled != nil {
+		n++
+	}
 	if n > 0 {
 		// result != nil
 		p.print(blank)
