@@ -410,6 +410,13 @@ type T2 struct{}
 
 func (T2) m(int) {}
 
+type T3 struct {
+	x int
+	y ?func()
+}
+
+func (?*T3) m() {}
+
 type mybool bool
 
 func type_asserts() {
@@ -428,8 +435,8 @@ func type_asserts() {
 
 	var t I
 	_ = t /* ERROR "use of .* outside type switch" */ .(type)
-	_ = t /* ERROR "missing method m" */ .(T)
-	_ = t.(?*T)
+	_ = t /* ERROR "missing method m" */ .(T3)
+	_ = t.(?*T3)
 	_ = t /* ERROR "missing method m" */ .(T1)
 	_ = t /* ERROR "wrong type for method m" */ .(T2)
 	_ = t /* STRICT "wrong type for method m" */ .(I2) // only an error in strict mode (issue 8561)

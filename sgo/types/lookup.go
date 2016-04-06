@@ -301,10 +301,9 @@ func MissingMethod(V Type, T *Interface, static bool) (method *Func, wrongType b
 // assertableTo reports whether a value of type V can be asserted to have type T.
 // It returns (nil, false) as affirmative answer. Otherwise it returns a missing
 // method required by V and whether it is missing or just has the wrong type.
-func assertableTo(V *Interface, T Type) (method *Func, wrongType bool, mustOptional bool) {
-	switch T.Underlying().(type) {
-	case *Pointer, *Map, *Signature, *Chan:
-		mustOptional = true
+func assertableTo(V *Interface, T Type) (method *Func, wrongType bool, needsOptional []Type) {
+	needsOptional = mustOptional(T.Underlying())
+	if len(needsOptional) > 0 {
 		return
 	}
 	// no static check is required if T is an interface
@@ -315,6 +314,45 @@ func assertableTo(V *Interface, T Type) (method *Func, wrongType bool, mustOptio
 	}
 	method, wrongType = MissingMethod(T, V, false)
 	return
+}
+
+// mustOptional reports whether a type T recursively needs to be wrapped in an optional.
+// If T is Array or Slice, the underlying type will be checked. If T is Optional, it will not
+// need to be wrapped in an optional unless the underlying type is a Map. In that case, further
+// checks are needed for the key and value type of the map.
+func mustOptional(T Type) []Type {
+	var needOptional []Type
+	switch T.(type) {
+	case *Pointer, *Map, *Signature, *Chan:
+		needOptional = append(needOptional, T)
+	case *Slice, *Array:
+		var underlying Type
+		switch T.(type) {
+		case *Slice:
+			underlying = T.(*Slice).Elem()
+		case *Array:
+			underlying = T.(*Array).Elem()
+		}
+
+		needOptional = append(needOptional, mustOptional(underlying)...)
+	case *Struct:
+		fields := T.(*Struct).fields
+		for _, f := range fields {
+			needOptional = append(needOptional, mustOptional(f.typ)...)
+		}
+	case *Optional:
+		switch underlying := T.(*Optional).Elem().(type) {
+		case *Map:
+			needOptional = append(needOptional, mustOptional(underlying.Key())...)
+			needOptional = append(needOptional, mustOptional(underlying.Elem())...)
+		case *Chan:
+			needOptional = append(needOptional, mustOptional(underlying.Elem())...)
+		case *Pointer:
+			needOptional = append(needOptional, mustOptional(underlying.Elem())...)
+		}
+	}
+
+	return needOptional
 }
 
 // deref dereferences typ if it is a *Pointer and returns its base and true.

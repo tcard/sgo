@@ -1470,8 +1470,8 @@ Error:
 // typeAssertion checks that x.(T) is legal; xtyp must be the type of x.
 func (check *Checker) typeAssertion(pos token.Pos, x *operand, xtyp *Interface, T Type) {
 	method, wrongType, mustOptional := assertableTo(xtyp, T)
-	if mustOptional {
-		check.errorf(pos, "%s cannot be type-asserted to %s (must be wrapped in optional)", x, T)
+	for _, o := range mustOptional {
+		check.errorf(pos, "%s cannot be type-asserted to %s (%s must be wrapped in optional)", x, T, o)
 	}
 
 	if method == nil {
