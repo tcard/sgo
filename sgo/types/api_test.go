@@ -1026,7 +1026,7 @@ func f() {
 		// Exclude selectors and qualified identifiers---lexical
 		// refs only.  (Ideally, we'd see if the AST parent is a
 		// SelectorExpr, but that requires PathEnclosingInterval
-		// from golang.org/x/tools/go/ast/astutil.)
+		// from github.com/tcard/sgo/tools/sgo/ast/astutil.)
 		if id.Name == "X" {
 			continue
 		}
