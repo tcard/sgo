@@ -102,7 +102,15 @@ const (
 
 // If indent is set, a multi-line identifier list is indented after the
 // first linebreak encountered.
-func (p *printer) identList(list []*ast.Ident, indent bool) {
+func (p *printer) identList(identList *ast.IdentList, indent bool) {
+	var list []*ast.Ident
+	if identList != nil {
+		list = identList.List
+	}
+	p.idents(list, indent)
+}
+
+func (p *printer) idents(list []*ast.Ident, indent bool) {
 	// convert into an expression list so we can re-use exprList formatting
 	xlist := make([]ast.Expr, len(list))
 	for i, x := range list {
@@ -112,7 +120,7 @@ func (p *printer) identList(list []*ast.Ident, indent bool) {
 	if !indent {
 		mode = noIndent
 	}
-	p.exprList(token.NoPos, ast.NewExprList(xlist...), 1, mode, token.NoPos)
+	p.exprs(token.NoPos, xlist, 1, mode, token.NoPos)
 }
 
 // Print a list of expressions. If the list spans multiple
@@ -122,32 +130,33 @@ func (p *printer) identList(list []*ast.Ident, indent bool) {
 // TODO(gri) Consider rewriting this to be independent of []ast.Expr
 //           so that we can use the algorithm for any kind of list
 //           (e.g., pass list via a channel over which to range).
-func (p *printer) exprList(prev0 token.Pos, list *ast.ExprList, depth int, mode exprListMode, next0 token.Pos) {
-	if len(list.List) == 0 {
+func (p *printer) exprList(prev0 token.Pos, exprList *ast.ExprList, depth int, mode exprListMode, next0 token.Pos) {
+	var list []ast.Expr
+	if exprList != nil {
+		list = exprList.List
+	}
+	p.exprs(prev0, list, depth, mode, next0)
+}
+
+func (p *printer) exprs(prev0 token.Pos, list []ast.Expr, depth int, mode exprListMode, next0 token.Pos) {
+	if len(list) == 0 {
 		return
 	}
 
 	prev := p.posFor(prev0)
 	next := p.posFor(next0)
-	line := p.lineFor(list.List[0].Pos())
-	endLine := p.lineFor(list.List[len(list.List)-1].End())
+	line := p.lineFor(list[0].Pos())
+	endLine := p.lineFor(list[len(list)-1].End())
 
 	if prev.IsValid() && prev.Line == line && line == endLine {
 		// all list entries on a single line
-		for i, x := range list.List {
+		for i, x := range list {
 			if i > 0 {
 				// use position of expression following the comma as
 				// comma position for correct comment placement
 				p.print(x.Pos(), token.COMMA, blank)
-			} else if i == list.EntangledPos-1 {
-				p.print(" ")
-				p.print(x.Pos(), token.BACKSL, blank)
 			}
 			p.expr0(x, depth)
-		}
-		if list.EntangledPos == len(list.List)+1 {
-			p.print(" ")
-			p.print(token.BACKSL, blank)
 		}
 		return
 	}
@@ -175,7 +184,7 @@ func (p *printer) exprList(prev0 token.Pos, list *ast.ExprList, depth int, mode 
 
 	// print all list elements
 	prevLine := prev.Line
-	for i, x := range list.List {
+	for i, x := range list {
 		line = p.lineFor(x.Pos())
 
 		// determine if the next linebreak, if any, needs to use formfeed:
@@ -227,7 +236,6 @@ func (p *printer) exprList(prev0 token.Pos, list *ast.ExprList, depth int, mode 
 				p.print(x.Pos())
 			}
 			p.print(token.COMMA)
-
 			needsBlank := true
 			if needsLinebreak {
 				// lines are broken using newlines so comments remain aligned
@@ -244,7 +252,7 @@ func (p *printer) exprList(prev0 token.Pos, list *ast.ExprList, depth int, mode 
 			}
 		}
 
-		if len(list.List) > 1 && isPair && size > 0 && needsLinebreak {
+		if len(list) > 1 && isPair && size > 0 && needsLinebreak {
 			// we have a key:value expression that fits onto one line
 			// and it's not on the same line as the prior expression:
 			// use a column for the key such that consecutive entries
@@ -282,8 +290,7 @@ func (p *printer) parameters(fields *ast.FieldList) {
 	if len(fields.List) > 0 {
 		prevLine := p.lineFor(fields.Opening)
 		ws := indent
-		list := fields.List
-		for i, par := range list {
+		for i, par := range fields.List {
 			// determine par begin and end line (may be different
 			// if there are multiple parameter names for this par
 			// or the type is on a separate line)
@@ -320,7 +327,7 @@ func (p *printer) parameters(fields *ast.FieldList) {
 				// again at the end (and still ws == indent). Thus, a subsequent indent
 				// by a linebreak call after a type, or in the next multi-line identList
 				// will do the right thing.
-				p.identList(par.Names, ws == indent)
+				p.idents(par.Names, ws == indent)
 				p.print(blank)
 			}
 			// parameter type
@@ -342,7 +349,7 @@ func (p *printer) parameters(fields *ast.FieldList) {
 }
 
 func (p *printer) signature(params, result *ast.FieldList) {
-	if params != nil && len(params.List) != 0 {
+	if params != nil {
 		p.parameters(params)
 	} else {
 		p.print(token.LPAREN, token.RPAREN)
@@ -451,7 +458,7 @@ func (p *printer) fieldList(fields *ast.FieldList, isStruct, isIncomplete bool) 
 			p.recordLine(&line)
 			if len(f.Names) > 0 {
 				// named fields
-				p.identList(f.Names, false)
+				p.idents(f.Names, false)
 				p.print(sep)
 				p.expr(f.Type)
 				extraTabs = 1
@@ -817,13 +824,13 @@ func (p *printer) expr1(expr ast.Expr, prec1, depth int) {
 		}
 		p.print(x.Lparen, token.LPAREN)
 		if x.Ellipsis.IsValid() {
-			p.exprList(x.Lparen, ast.NewExprList(x.Args...), depth, 0, x.Ellipsis)
+			p.exprs(x.Lparen, x.Args, depth, 0, x.Ellipsis)
 			p.print(x.Ellipsis, token.ELLIPSIS)
 			if x.Rparen.IsValid() && p.lineFor(x.Ellipsis) < p.lineFor(x.Rparen) {
 				p.print(token.COMMA, formfeed)
 			}
 		} else {
-			p.exprList(x.Lparen, ast.NewExprList(x.Args...), depth, commaTerm, x.Rparen)
+			p.exprs(x.Lparen, x.Args, depth, commaTerm, x.Rparen)
 		}
 		p.print(x.Rparen, token.RPAREN)
 		if wasIndented {
@@ -836,7 +843,7 @@ func (p *printer) expr1(expr ast.Expr, prec1, depth int) {
 			p.expr1(x.Type, token.HighestPrec, depth)
 		}
 		p.print(x.Lbrace, token.LBRACE)
-		p.exprList(x.Lbrace, ast.NewExprList(x.Elts...), 1, commaTerm, x.Rbrace)
+		p.exprs(x.Lbrace, x.Elts, 1, commaTerm, x.Rbrace)
 		// do not insert extra line break following a /*-style comment
 		// before the closing '}' as it might break the code if there
 		// is no trailing ','
@@ -1068,7 +1075,15 @@ func (p *printer) controlClause(isForStmt bool, init ast.Stmt, expr ast.Expr, po
 // were indented wholesale (starting with the very first element, rather
 // than starting at the first line break).
 //
-func (p *printer) indentList(list []ast.Expr) bool {
+func (p *printer) indentList(exprList *ast.ExprList) bool {
+	var list []ast.Expr
+	if exprList != nil {
+		list = exprList.List
+	}
+	return p.indentExprs(list)
+}
+
+func (p *printer) indentExprs(list []ast.Expr) bool {
 	// Heuristic: indentList returns true if there are more than one multi-
 	// line element in the list, or if there is any element that is not
 	// starting on the same line as the previous one ends.
@@ -1146,7 +1161,7 @@ func (p *printer) stmt(stmt ast.Stmt, nextIsRBrace bool) {
 
 	case *ast.AssignStmt:
 		var depth = 1
-		if len(s.Lhs.List) > 1 && len(s.Rhs.List) > 1 {
+		if s.Lhs.Len() > 1 && s.Rhs.Len() > 1 {
 			depth++
 		}
 		p.exprList(s.Pos(), s.Lhs, depth, 0, s.TokPos)
@@ -1163,14 +1178,14 @@ func (p *printer) stmt(stmt ast.Stmt, nextIsRBrace bool) {
 
 	case *ast.ReturnStmt:
 		p.print(token.RETURN)
-		if s.Results != nil && len(s.Results.List) != 0 {
+		if s.Results != nil {
 			p.print(blank)
 			// Use indentList heuristic to make corner cases look
 			// better (issue 1207). A more systematic approach would
 			// always indent, but this would cause significant
 			// reformatting of the code base and not necessarily
 			// lead to more nicely formatted code in general.
-			if p.indentList(s.Results.List) {
+			if p.indentList(s.Results) {
 				p.print(indent)
 				p.exprList(s.Pos(), s.Results, 1, noIndent, token.NoPos)
 				p.print(unindent)
@@ -1209,7 +1224,7 @@ func (p *printer) stmt(stmt ast.Stmt, nextIsRBrace bool) {
 		}
 
 	case *ast.CaseClause:
-		if s.List != nil && len(s.List.List) != 0 {
+		if s.List.Len() != 0 {
 			p.print(token.CASE, blank)
 			p.exprList(s.Pos(), s.List, 1, 0, s.Colon)
 		} else {
@@ -1327,7 +1342,7 @@ func keepTypeColumn(specs []ast.Spec) []bool {
 	var keepType bool
 	for i, s := range specs {
 		t := s.(*ast.ValueSpec)
-		if t.Values != nil && len(t.Values.List) != 0 {
+		if t.Values.Len() != 0 {
 			if i0 < 0 {
 				// start of a run of ValueSpecs with non-nil Values
 				i0 = i
@@ -1354,7 +1369,7 @@ func keepTypeColumn(specs []ast.Spec) []bool {
 
 func (p *printer) valueSpec(s *ast.ValueSpec, keepType bool) {
 	p.setComment(s.Doc)
-	p.identList(s.Names.List, false) // always present
+	p.identList(s.Names, false) // always present
 	extraTabs := 3
 	if s.Type != nil || keepType {
 		p.print(vtab)
@@ -1363,7 +1378,7 @@ func (p *printer) valueSpec(s *ast.ValueSpec, keepType bool) {
 	if s.Type != nil {
 		p.expr(s.Type)
 	}
-	if s.Values != nil && len(s.Values.List) != 0 {
+	if s.Values.Len() > 0 {
 		p.print(vtab, token.ASSIGN, blank)
 		p.exprList(token.NoPos, s.Values, 1, 0, token.NoPos)
 		extraTabs--
@@ -1440,12 +1455,12 @@ func (p *printer) spec(spec ast.Spec, n int, doIndent bool) {
 			p.internalError("expected n = 1; got", n)
 		}
 		p.setComment(s.Doc)
-		p.identList(s.Names.List, doIndent) // always present
+		p.identList(s.Names, doIndent) // always present
 		if s.Type != nil {
 			p.print(blank)
 			p.expr(s.Type)
 		}
-		if s.Values != nil && len(s.Values.List) != 0 {
+		if s.Values.Len() != 0 {
 			p.print(blank, token.ASSIGN, blank)
 			p.exprList(token.NoPos, s.Values, 1, 0, token.NoPos)
 		}
@@ -1621,7 +1636,7 @@ func (p *printer) distanceFrom(from token.Pos) int {
 func (p *printer) funcDecl(d *ast.FuncDecl) {
 	p.setComment(d.Doc)
 	p.print(d.Pos(), token.FUNC, blank)
-	if d.Recv != nil && len(d.Recv.List) != 0 {
+	if d.Recv != nil {
 		p.parameters(d.Recv) // method: print receiver
 		p.print(blank)
 	}

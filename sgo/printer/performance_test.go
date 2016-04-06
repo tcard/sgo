@@ -16,12 +16,9 @@ import (
 
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/parser"
-	"github.com/tcard/sgo/sgo/token"
 )
 
 var testfile *ast.File
-
-var fset = token.NewFileSet()
 
 func testprint(out io.Writer, file *ast.File) {
 	if err := (&Config{TabIndent | UseSpaces, 8, 0}).Fprint(out, fset, file); err != nil {

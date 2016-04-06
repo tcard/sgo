@@ -105,7 +105,7 @@ func (p *printer) internalError(msg ...interface{}) {
 	if debug {
 		fmt.Print(p.pos.String() + ": ")
 		fmt.Println(msg...)
-		panic("github.com/tcard/sgo/sgo/printer")
+		panic("go/printer")
 	}
 }
 
