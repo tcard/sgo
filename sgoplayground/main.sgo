@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/tcard/sgo/sgo"
@@ -27,124 +26,123 @@ var (
 	upgrader = websocket.Upgrader{}
 )
 
-func main() {
-	flag.Parse()
+const defaultHost = "fanyare.tcardenas.me:5600"
 
-	msgCh := make(chan msgType)
-	go func() {
-		for msg := range msgCh {
-			c := msg.c
-			if c == nil {
-				panic("c shouldn't be nil")
+func handleMsg(msg msgType) {
+	c := msg.c
+	if c == nil {
+		log.Println("c shouldn't be nil")
+		return
+	}
+	switch msg.Type {
+	case "format":
+		resp := &msgType{
+			Type: "format",
+		}
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					value := fmt.Sprintln(r)
+					stack := make([]byte, 99999)
+					runtime.Stack(stack, false)
+					value += string(stack)
+					resp.Value = value
+				}
+			}()
+			formatted, err := format.Source([]byte(msg.Value.(string)))
+			if err == nil {
+				resp.Value = string(formatted)
 			}
-			time.Sleep(1 * time.Second)
-			switch msg.Type {
-			case "format":
-				resp := &msgType{
-					Type: "format",
+		}()
+		c.WriteJSON(resp)
+	case "translate":
+		resp := &msgType{
+			Type: "translate",
+		}
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					value := fmt.Sprintln(r)
+					stack := make([]byte, 99999)
+					runtime.Stack(stack, false)
+					value += string(stack)
+					resp.Value = value
 				}
-				func() {
-					defer func() {
-						if r := recover(); r != nil {
-							value := fmt.Sprintln(r)
-							stack := make([]byte, 99999)
-							runtime.Stack(stack, false)
-							value += string(stack)
-							resp.Value = value
-						}
-					}()
-					formatted, err := format.Source([]byte(msg.Value.(string)))
-					if err == nil {
-						resp.Value = string(formatted)
-					}
-				}()
-				c.WriteJSON(resp)
-			case "translate":
-				resp := &msgType{
-					Type: "translate",
-				}
-				func() {
-					defer func() {
-						if r := recover(); r != nil {
-							value := fmt.Sprintln(r)
-							stack := make([]byte, 99999)
-							runtime.Stack(stack, false)
-							value += string(stack)
-							resp.Value = value
-						}
-					}()
-					w := &bytes.Buffer{}
-					errs := sgo.TranslateFile(func() (io.Writer \ error) { return w \ }, strings.NewReader(msg.Value.(string)), "name")
-					if errs != nil {
-						var errMsgs []string
+			}()
+			w := &bytes.Buffer{}
+			errs := sgo.TranslateFile(func() (io.Writer \ error) { return w \ }, strings.NewReader(msg.Value.(string)), "name")
+			if errs != nil {
+				var errMsgs []string
+				for _, err := range errs {
+					if errs \ ok := err.(scanner.ErrorList); ok {
 						for _, err := range errs {
-							if errs \ ok := err.(scanner.ErrorList); ok {
-								for _, err := range errs {
-									errMsgs = append(errMsgs, err.Error())
-								}
-							} else {
-								errMsgs = append(errMsgs, err.Error())
-							}
-						}
-						resp.Value = strings.Join(errMsgs, "\n")
-					} else {
-						resp.Value = w.String()
-					}
-				}()
-				c.WriteJSON(resp)
-			case "execute":
-				resp := &msgType{
-					Type: "execute",
-				}
-				body := url.Values{}
-				body.Add("version", "2")
-				var errs []error
-				w := &bytes.Buffer{}
-				func() {
-					defer func() {
-						if r := recover(); r != nil {
-							value := fmt.Sprintln(r)
-							stack := make([]byte, 99999)
-							runtime.Stack(stack, false)
-							value += string(stack)
-							errs = append(errs, errors.New(value))
-						}
-					}()
-
-					errs = sgo.TranslateFile(func() (io.Writer \ error) { return w \ }, strings.NewReader(msg.Value.(string)), "name")
-				}()
-				if errs != nil {
-					var errMsgs []string
-					for _, err := range errs {
-						if errs \ ok := err.(scanner.ErrorList); ok {
-							for _, err := range errs {
-								errMsgs = append(errMsgs, err.Error())
-							}
-						} else {
 							errMsgs = append(errMsgs, err.Error())
 						}
-					}
-					resp.Value = strings.Join(errMsgs, "\n")
-				} else {
-					body.Add("body", w.String())
-					postResp \ err := http.PostForm("http://play.golang.org/compile", body)
-					if err != nil {
-						resp.Value = err.Error()
 					} else {
-						var v ?interface{}
-						err := json.NewDecoder(postResp.Body).Decode(&v)
-						postResp.Body.Close()
-						if err != nil {
-							resp.Value = err.Error()
-						} else {
-							resp.Value = v
-						}
+						errMsgs = append(errMsgs, err.Error())
 					}
 				}
-				c.WriteJSON(resp)
+				resp.Value = strings.Join(errMsgs, "\n")
+			} else {
+				resp.Value = w.String()
+			}
+		}()
+		c.WriteJSON(resp)
+	case "execute":
+		resp := &msgType{
+			Type: "execute",
+		}
+		body := url.Values{}
+		body.Add("version", "2")
+		var errs []error
+		w := &bytes.Buffer{}
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					value := fmt.Sprintln(r)
+					stack := make([]byte, 99999)
+					runtime.Stack(stack, false)
+					value += string(stack)
+					errs = append(errs, errors.New(value))
+				}
+			}()
+
+			errs = sgo.TranslateFile(func() (io.Writer \ error) { return w \ }, strings.NewReader(msg.Value.(string)), "name")
+		}()
+		if errs != nil {
+			var errMsgs []string
+			for _, err := range errs {
+				if errs \ ok := err.(scanner.ErrorList); ok {
+					for _, err := range errs {
+						errMsgs = append(errMsgs, err.Error())
+					}
+				} else {
+					errMsgs = append(errMsgs, err.Error())
+				}
+			}
+			resp.Value = strings.Join(errMsgs, "\n")
+		} else {
+			body.Add("body", w.String())
+			postResp \ err := http.PostForm("http://play.golang.org/compile", body)
+			if err != nil {
+				resp.Value = err.Error()
+			} else {
+				var v ?interface{}
+				err := json.NewDecoder(postResp.Body).Decode(&v)
+				postResp.Body.Close()
+				if err != nil {
+					resp.Value = err.Error()
+				} else {
+					resp.Value = v
+				}
 			}
 		}
-	}()
+		c.WriteJSON(resp)
+	}
+}
+
+func main() {
+	flag.Parse()
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, req *http.Request) {
 		c \ err := upgrader.Upgrade(w, req, nil)
@@ -161,14 +159,25 @@ func main() {
 				break
 			}
 			recvMsg.c = c
-
-			msgCh <- recvMsg
+			handleMsg(recvMsg)
 		}
-
 	})
+
+	buf := &bytes.Buffer{}
+	indexTpl.Execute(buf, map[string]interface{}{
+		"Gist":          "",
+		"WSURL":         "ws://" + defaultHost + "/ws",
+		"PreloadedCode": defaultPreloadedCode,
+	})
+	preexecutedTpl := buf.Bytes()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		gist := req.URL.Query().Get("gist")
+		if gist == "" && req.Host == defaultHost {
+			w.Write(preexecutedTpl)
+			return
+		}
+
 		preloadedCode := ""
 		if gist == "" {
 			preloadedCode = defaultPreloadedCode
@@ -193,35 +202,42 @@ type msgType struct {
 const defaultPreloadedCode = `package main
 
 import (
-	"errors"
 	"fmt"
 )
 
-type Result struct {
-	a int
-}
-
-func Foo(i int) (*Result, int \ error) {
-	if i%2 == 0 {
-		return &Result{i}, i * 2 \
-	}
-	// return nil, errors.New("hola") // doesn't compile
-	// return nil, nil		 // doesn't compile
-	return  \ errors.New("hola")
-}
-
 func main() {
-	res, i \ err := Foo(123)
-	// _ = err.Error() // doesn't compile
-	if err == nil {
-		// _ = err.Error() // doesn't compile
-		fmt.Println("Result:", res, "i:", i) // will never panic; res will never be nil
-	} else {
-		fmt.Println("Error:", err.Error())
-		// fmt.Println(res, i, err) // doesn't compile; res is entangled here
+	// var p *Something = nil <-- wrong! Doesn't compile.
+	var p *Something = &Something{"🦄"} // OK!
+	fmt.Println(*p)                    // OK! And it won't ever crash, as p can't be nil.
+
+	var op ?*Something = nil // OK!
+	// fmt.Println(*op) <-- wrong! Doesn't compile.
+	if op != nil {
+		fmt.Println(*op) // OK! You checked that op is not nil.
 	}
-	// fmt.Println(res, i, err) // doesn't compile; res is entangled here
-}`
+
+	s \ err := giveMeSomethingMaybe()
+
+	// fmt.Println(*s) <-- wrong! Doesn't compile.
+
+	if err != nil {
+		return
+	}
+	fmt.Println(*s) // <-- OK! You checked that err is nil, and thus s is usable.
+}
+
+type Something struct {
+	message string
+}
+
+func (s Something) String() string { return fmt.Sprint("Something: ", s.message) }
+
+func giveMeSomethingMaybe() (*Something \ error) {
+	return &Something{"gave you a *Something!"} \
+	// Or alternatively:
+	// return \ errors.New("sorry, no luck!")
+}
+`
 
 var indexTpl = template.Must(template.New("index").Parse(`
 <!DOCTYPE html>
@@ -235,7 +251,7 @@ var indexTpl = template.Must(template.New("index").Parse(`
 <body>
 
 <div style="width: 50%; float: left;">
-<textarea id="input-code" style="width: 90%;" rows="30">
+<textarea id="input-code" style="width: 90%; font-family: monospace;" rows="30">
 {{.PreloadedCode}}
 </textarea>
 </div>

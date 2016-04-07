@@ -302,7 +302,7 @@ func MissingMethod(V Type, T *Interface, static bool) (method *Func, wrongType b
 // It returns (nil, false) as affirmative answer. Otherwise it returns a missing
 // method required by V and whether it is missing or just has the wrong type.
 func assertableTo(V *Interface, T Type) (method *Func, wrongType bool, needsOptional []Type) {
-	needsOptional = mustOptional(T.Underlying())
+	needsOptional = mustOptional(T)
 	if len(needsOptional) > 0 {
 		return
 	}
