@@ -1,49 +1,35 @@
-# WARNING: Very early stage!
-
-There's a playground over here: http://fanyare.tcardenas.me:5600
-
 # SGo: a safer Go dialect [![Build Status](https://secure.travis-ci.org/tcard/sgo.svg?branch=master)](http://travis-ci.org/tcard/sgo)
 
-SGo is a dialect of the Go programming language that enhances its type system with **optional types** and **removes nil references**. It is based on idiomatic Go patterns, so SGo code feels familiar, and straightforwarldy compiles to plain Go.
+SGo is a dialect of the Go programming language that **avoids nil-related panics at compile time**. It is based on idiomatic Go patterns, so SGo code feels familiar, and straightforwarldy compiles to and [works together with](#importing-from-and-exporting-to-go) plain Go.
 
-It introduces this:
+It looks like this:
 
 ```go
-type Response struct {
-	Body ?io.ReadCloser
-}
+// var p *Something = nil <-- wrong! Doesn't compile.
+var p *Something = &Something{} // OK!
+_ = *p // OK! And it won't ever crash, as p can't be nil.
 
-// response.Body.Close() doesn't compile; Body might be nil.
-
-if body := response.Body; body != nil {
-	body.Close()
+var op ?*Something = nil // OK!
+// _ = *op <-- wrong! Doesn't compile.
+if op != nil {
+	_ = *op // OK! You checked that op is not nil.
 }
 ```
 
-And this:
 ```go
-func Get(r *http.Request) (*Response \ error) { ... }
+func giveMeSomethingMaybe() (*Something \ error) { ... }
 
-response \ err := Get(r)
+s \ err := giveMeSomethingMaybe()
 
-// body := response.Body doesn't compile; can't use response until we know
-// that err is nil.
+// _ = *s <-- wrong! Doesn't compile.
 
 if err != nil {
-	return err
+	return
 }
-body := response.Body
+_ = *s <-- OK! You checked that err is nil, and thus s is usable.
 ```
 
-While removing this:
-
-```go
-var s fmt.Stringer = nil // doesn't compile in SGo; interfaces can't be nil without ?.
-s.String() // doesn't compile in SGo; would cause panic.
-
-var m map[string]int = nil // also doesn't compile in SGo, because...
-_ = m["needle"]            // ... would cause a panic if used before initialized.
-```
+[See it running, plus its Go translation, here!](http://fanyare.tcardenas.me:5600/?gist=4292080531744dbb9cc6ac6ff1a01627)
 
 ## Table of contents
 
@@ -51,6 +37,7 @@ _ = m["needle"]            // ... would cause a panic if used before initialized
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 
+- [A quick comparison with plain Go](#a-quick-comparison-with-plain-go)
 - [The billion dollar mistake](#the-billion-dollar-mistake)
 - [Optional types](#optional-types)
 - [Entangled optionals](#entangled-optionals)
@@ -60,9 +47,71 @@ _ = m["needle"]            // ... would cause a panic if used before initialized
 - [Zero values of pointers, maps, functions, channels, and interfaces](#zero-values-of-pointers-maps-functions-channels-and-interfaces)
 - [Type assertions](#type-assertions)
 - [Reflection](#reflection)
+- [Importing from, and exporting to, Go](#importing-from-and-exporting-to-go)
+  - ["For SGo:" doc comments](#for-sgo-doc-comments)
+  - [sgovendor](#sgovendor)
+  - [Built-in annotations](#built-in-annotations)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
+## A quick comparison with plain Go
+
+So, what does SGo buy me? Let's see a comparison with potentially crashing Go code:
+
+```go
+// Plain Go code
+
+type Response struct {
+	Body io.ReadCloser
+}
+response := &Response{Body: nil}
+response.Body.Close() // This line crashes! response.Body is nil.
+```
+
+In SGo, this situation is avoided all together. This line:
+
+```go
+response := &Response{Body: nil} // Doesn't compile in SGo! An interface, like io.ReadCloser, can't be nil.
+```
+
+wouldn't compile: an `io.ReadCloser` isn't allowed be nil. You are forced to actually give something that can be readed and closed there.
+
+In case you need something to accept nil as a value, you have to put a `?` before its type:
+
+```go
+type Response struct {
+	Body ?io.ReadCloser
+}
+```
+
+Only that in this case, this line wouldn't compile:
+
+```go
+response.Body.Close() // Doesn't compile in SGo! You can't call methods on a ?-prefixed interface. 
+```
+
+Instead, SGo forces you to check that `response.Body` is not nil before using it, like this:
+
+```go
+if body := response.Body; body != nil {
+	body.Close()
+}
+```
+
+Note that this is something that you _should_ be doing anyway in plain Go, if `response.Body` being nil is a real possibility. SGo just takes that and makes it mandatory.
+
+This applies also to channels, maps, pointers, and functions:
+
+```go
+var ch chan string = nil // Doesn't compile in SGo; channels can't be nil without ?.
+ch <- "Hello!" // Doesn't compile in SGo; would cause panic.
+
+var m map[string]int = nil // Also doesn't compile in SGo, because...
+_ = m["needle"]            // ... would cause a panic if used before initialized.
+
+var f func() = nil // Same deal...
+f()                // ... because this would panic.
+```
 
 ## The billion dollar mistake
 
@@ -78,7 +127,7 @@ In SGo, **this nothingness concept is represented in a way that the compiler can
 
 ## Optional types
 
-In SGo, pointers, interfaces, maps, channels and functions by themselves can't be `nil`. That is, if you get a pointer, you know that it is pointer somewhere; if you get an interface, you know there's some object implementing it that you can call methods on; if you get a map, you know you can immediately get and put things in it; if you get a channel, you know you can send and receive things through it without necessarily blocking forever and, if you get a function, you know you can call it. There's no "hey, I know you asked for this thing but I give you nothing instead". (Slices still can be nil; you can't do anything with it that would cause a nil pointer dereference, so there's no point forbidding that.)
+In SGo, pointers, interfaces, maps, channels and functions by themselves can't be `nil`. That is, **if you get a pointer, you know that it is pointing somewhere**; if you get an interface, you know there's some object implementing it that you can call methods on; if you get a map, you know you can immediately get and put things in it; if you get a channel, you know you can send and receive things through it without necessarily blocking forever and, if you get a function, you know you can call it. **There's no "hey, I know you asked for this thing but I give you nothing instead".** (Slices still can be nil; you can't do anything with it that would cause a nil pointer dereference, so there's no point forbidding that.)
 
 If you do want to provide the option of not having something, you use optional types.
 
@@ -295,8 +344,6 @@ Those types don't have a zero value in SGo. This is a new situation that never h
 
 What happens instead is that an uninitialized variable remains uninitialized, and you can't use it until it is proven that you have initialized it. In structs or arrays, you can't leave a field or element of one or those types unitialized.
 
-**BUG:** Currently, this isn't implemented correctly in some situations. See issues [#2](https://github.com/tcard/sgo/issues/2), [#3](https://github.com/tcard/sgo/issues/3).
-
 ## Type assertions
 
 SGo compiles to Go, and all information about optional types gets lost in translation.
@@ -338,8 +385,6 @@ var x interface{} = m
 // v["bar"] = 456
 ```
 
-**BUG:** Currently, this doesn't guarantee correctness for composite types. See issue [#1](https://github.com/tcard/sgo/issues/1).
-
 ## Reflection
 
 Because, at runtime, SGo programs are just Go, and thus know nothing of optionals, reflection will ignore them altogether, and just use their underlying Go representation.
@@ -366,3 +411,98 @@ v.Elem().Set(reflect.Zero(v.Elem().Type()))
 // It wouldn't be possible to say p = nil in normal SGo.
 fmt.Println(p.X) // Causes a nil panic, because p is nil.
 ```
+
+## Importing from, and exporting to, Go
+
+SGo is designed to be pleasant to use together with both other SGo code and plain old Go code.
+
+Because SGo compiles to plain Go, you use SGo code in a separate plain Go file by just using its compiled Go counterpart, either importing its package or putting it in the same package. There's nothing special going on in this case.
+
+This get more interesting when importing Go code into SGo.
+
+When importing a package, **SGo performs an automatic translation of the Go types** it finds into SGo types. Basically, it puts a `?` before everything that in Go can be nil but in SGo cannot.
+
+This alone would be too cumbersome to use, though. Consider, for example, [`"net/http".HandleFunc`](https://godoc.org/net/http#HandleFunc):
+
+```go
+func HandleFunc(pattern string, handler func(ResponseWriter, *Request))
+```
+
+Following this naive approach, SGo would import that as this:
+
+```go
+func HandleFunc(pattern string, handler ?func(?ResponseWriter, ?*Request))
+```
+
+But we _know_ that `"net/http"` won't give us a nil `http.ResponseWriter` nor a nil `*http.Request`, and that it requires us to give it a non-nil `handler` function. We need to tell SGo this somehow. There are three ways this can happen.
+
+### "For SGo:" doc comments
+
+If something has a comment beginning with `// For SGo: ` before, SGo takes the rest of the line and uses it as if it were the type of the thing being commented.
+
+```go
+// For SGo: func(string, func(w http.ResponseWriter, req *http.Request)
+func HandleFunc(pattern string, handler func(ResponseWriter, *Request))
+```
+
+SGo will see the `func(string, func(w http.ResponseWriter, req *http.Request)`, and just believe that `HandleFunc` has that type, instead of the automatically inferred `func(string, ?func(w ?http.ResponseWriter, req ?*http.Request)`.
+
+Let's see a more interesting example, [`"net/http".Post`](https://godoc.org/net/http#Post):
+
+```go
+func Post(url string, bodyType string, body io.Reader) (resp *Response, err error)
+```
+
+We know that the library expects `body` to possibly be nil, meaning that the POST request has no body. We also know that we aren't supposed to use `resp` if `err` is not nil. So we can annotate it like this:
+
+```go
+// For SGo: func(url string, bodyType string, body ?io.Reader) (resp *Response \ err error)
+func Post(url string, bodyType string, body io.Reader) (resp *Response, err error)
+```
+
+We can replace a multiple return value with [an entangled return](#entangled-optionals), making things much more usable from SGo.
+
+**SGo automatically inserts such "For SGo:" comments when compiling SGo code to Go**, so if a library is written in SGo originally, another SGo package can import it and expect it to work. Having those annotations in the doc comment has the additional advantage of telling Go users of our originally SGo code what should and shouldn't be ever nil.
+
+Of course, there's an important downside to "For SGo:" comments: **we can't just add them to third-party code**. When it's not our own code that we are annotating, SGo gives us another way: sgovendor.
+
+### sgovendor
+
+You can annotate third-party code for your own SGo project by putting only the annotations **in a special folder, called sgovendor**, alongside your code.
+
+A sgovendor folder should have a folder structure matching the path of the Go packages you want to annotate. In the last level, you should put one or more files with a `.sgoann` extension.
+
+Those `.sgoann` files must have the following syntax:
+
+```
+File -> List
+List -> Item*
+Item -> Name Def /[\n;]*/
+Name -> Ident | Receiver
+Receiver -> "(" "*" Ident ")"
+Ident -> (Go identifier)
+Def -> Type | "{" List "}"
+Type -> /[^{][^\n;]*/
+```
+
+For example, let's say that our project uses [`"github.com/gorilla/websocket".(*Upgrader).Upgrade`](https://godoc.org/github.com/gorilla/websocket#Upgrader.Upgrade). SGo would naively translate it into this:
+
+```go
+func (u ?*Upgrader) Upgrade(w ?http.ResponseWriter, r ?*http.Request, responseHeader ?http.Header) (?*Conn, ?error)
+```
+
+But we can do better. So we make a "sgovendor" folder alongside our code, then a "github.com" folder inside, then a "gorilla" folder inside that one, and a "websocket" folder inside that, and then create a "websocket.sgoann" file inside with this:
+
+```go
+(*Upgrader) {
+	Upgrade func(w http.ResponseWriter, r *http.Request, responseHeader ?http.Header) (*Conn \ error)
+}
+```
+
+(In fact, that's exactly [what sgoplayground does](https://github.com/tcard/sgo/tree/master/sgoplayground/sgovendor/github.com/gorilla/websocket).)
+
+### Built-in annotations
+
+For the standard library, SGo comes with predefined SGo annotations. You can check those [here](https://github.com/tcard/sgo/blob/master/sgo/importer/default.go).
+
+Ideally, that file would have annotations for the _whole_ standard library; please contribute!
