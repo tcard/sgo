@@ -524,4 +524,4 @@ And **goimports**:
 go get github.com/tcard/sgo/tools/cmd/sgoimports
 ```
 
-There's not much editor support beyond that. For **Sublime Text 3**, I hacked together [a fork of GoSublime](https://github.com/tcard/sgo) that might come handy (it does for me!).
+There's not much editor support beyond that. For **Sublime Text 3**, I hacked together [a fork of GoSublime](https://github.com/tcard/SGoSublime) that might come handy (it does for me!).
