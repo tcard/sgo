@@ -53,6 +53,7 @@ _ = *s <-- OK! You checked that err is nil, and thus s is usable.
   - ["For SGo:" doc comments](#for-sgo-doc-comments)
   - [sgovendor](#sgovendor)
   - [Built-in annotations](#built-in-annotations)
+- [Tooling](#tooling)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -508,3 +509,19 @@ But we can do better. So we make a "sgovendor" folder alongside our code, then a
 For the standard library, SGo comes with predefined SGo annotations. You can check those [here](https://github.com/tcard/sgo/blob/master/sgo/importer/default.go).
 
 Ideally, that file would have annotations for the _whole_ standard library; please contribute!
+
+## Tooling
+
+There are forks of both **gofmt**:
+
+```
+go get github.com/tcard/sgo/tools/cmd/sgofmt
+```
+
+And **goimports**:
+
+```
+go get github.com/tcard/sgo/tools/cmd/sgoimports
+```
+
+There's not much editor support beyond that. For **Sublime Text 3**, I hacked together [a fork of GoSublime](https://github.com/tcard/sgo) that might come handy (it does for me!).
