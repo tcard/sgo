@@ -71,7 +71,7 @@ response := &Response{Body: nil}
 response.Body.Close() // This line crashes! response.Body is nil.
 ```
 
-In SGo, this situation is avoided all together. This line:
+In SGo, this situation is avoided altogether. This line:
 
 ```go
 response := &Response{Body: nil} // Doesn't compile in SGo! An interface, like io.ReadCloser, can't be nil.
@@ -124,7 +124,7 @@ f()                // ... because this would panic.
 
 `nil`, in Go, is used to represent **the idea of "you expected something to be here, but there is nothing"** for certain types (pointers, slices, interfaces, maps, channels, and functions). This is a very useful concept; not only it can be used by the  logic of your programs to express lack of something (e. g. a `http.Request` can have no body, in which case its `Body` field is `nil`), but also provides a meaningful way of initializing variables and fields of those types.
 
-`nil` has a problem, though. Sometimes **the code expect something to _be something_, but it is `nil` instead**. In those situations, **the program usually crashes**; those are the infamous `invalid memory address or nil pointer dereference` panics. There is no way of preventing those situations except carefully reasoning about what do you write, and hoping that testing catches all of This is often not the case. Even when it is, the process of achieving it is costly, if not because of  crashes in production, because of developer effort spent on it.
+`nil` has a problem, though. Sometimes **the code expect something to _be something_, but it is `nil` instead**. In those situations, **the program usually crashes**; those are the infamous `invalid memory address or nil pointer dereference` panics. There is no way of preventing those situations except carefully reasoning about what do you write, and hoping that testing catches all possible misses. of This is often not the case. Even when it is, the process of achieving it is costly, if not because of  crashes in production, because of developer effort spent on it.
 
 In SGo, **this nothingness concept is represented in a way that the compiler can track**, so those situations never cause a crash while running the program, but simply prevent the program from even compiling.
 
@@ -229,7 +229,7 @@ func Get(url string) (*Response \ error) { ... }
 response, err := http.Get("http://github.com/tcard/sgo")
 // You can't use response yet; it wouldn't compile.
 if err != nil {
-	// You shouldn't use response here. It is probably nil.
+	// You can't use response yet; it wouldn't compile.
 	return err
 }
 // Now it _is_ enforced by the compiler that response is _not_
@@ -318,7 +318,7 @@ In SGo, such operations return an [entangled bool](#entangled-bools) instead.
 
 ```go
 m = map[int]string{456: "foo"}
-v \ ok := m[123] // v is "", ok is false
+v \ ok := m[123] // v is uninitialized, ok is false
 // fmt.Println(v) doesn't compile; ok might be false.
 if ok {
 	fmt.Println(v)
