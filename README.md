@@ -1,4 +1,4 @@
-# SGo: a safer Go dialect [![Build Status](https://secure.travis-ci.org/tcard/sgo.svg?branch=master)](http://travis-ci.org/tcard/sgo)
+# SGo: a safer Go dialect [![Build Status](https://secure.travis-ci.org/tcard/sgo.svg?branch=master)](http://travis-ci.org/tcard/sgo) [![Gitter](https://badges.gitter.im/tcard/sgo.svg)](https://gitter.im/tcard/sgo?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 **Disclaimer: alpha stage!**
 
