@@ -430,7 +430,7 @@ func (c *converter) convertTypeName(v *gotypes.TypeName) *types.TypeName {
 		typ,
 	)
 	c.converted[v] = ret
-	named := types.NewNamed(ret, nil, nil)
+	named := types.NewNamed(ret, c.convertType(v.Type().Underlying()), nil)
 	c.converted[v.Type()] = named
 	return ret
 }
@@ -482,7 +482,10 @@ func (c *converter) convertNamed(v *gotypes.Named) *types.Named {
 		return types.Universe.Lookup("error").(*types.TypeName).Type().(*types.Named)
 	}
 	typeName := c.convertTypeName(v.Obj())
-	ret := typeName.Type().(*types.Named)
+	ret, ok := typeName.Type().(*types.Named)
+	if !ok {
+		ret = types.NewNamed(nil, nil, nil)
+	}
 	c.converted[v] = ret
 	for i := 0; i < v.NumMethods(); i++ {
 		ret.AddMethod(c.convertFunc(v.Method(i)))

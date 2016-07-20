@@ -297,7 +297,7 @@ func writeSignature(buf *bytes.Buffer, sig *Signature, qf Qualifier, visited []T
 	}
 
 	buf.WriteByte(' ')
-	if n == 1 && sig.results.vars[0].name == "" {
+	if n == 1 && sig.results.vars[0].name == "" && sig.results.entangled == nil {
 		// single unnamed result
 		writeType(buf, sig.results.vars[0].typ, qf, visited)
 		return

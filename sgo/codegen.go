@@ -181,7 +181,7 @@ func TranslateFilesFrom(whence string, files ...NamedFile) ([][]byte, []error) {
 		return nil, errs
 	}
 
-	return translate(info, srcs, parsed), errs
+	return translate(info, srcs, parsed, fset), errs
 }
 
 // For SGo: func(w func() (io.Writer \ error), r io.Reader, filename string) []error
@@ -250,10 +250,10 @@ func typecheck(path string, fset *token.FileSet, whence string, sgoFiles ...*ast
 	return info, nil
 }
 
-func translate(info *types.Info, srcs [][]byte, sgoFiles []*ast.File) [][]byte {
+func translate(info *types.Info, srcs [][]byte, sgoFiles []*ast.File, fset *token.FileSet) [][]byte {
 	dsts := make([][]byte, 0, len(sgoFiles))
 	for i, sgoFile := range sgoFiles {
-		dsts = append(dsts, convertAST(info, srcs[i], sgoFile))
+		dsts = append(dsts, convertAST(info, srcs[i], sgoFile, fset))
 	}
 	return dsts
 }
@@ -379,11 +379,12 @@ func (v visitorFunc) Visit(node ast.Node) (w ast.Visitor) {
 	return v(node)
 }
 
-func convertAST(info *types.Info, src []byte, sgoAST *ast.File) []byte {
+func convertAST(info *types.Info, src []byte, sgoAST *ast.File, fset *token.FileSet) []byte {
 	c := converter{
 		Info: info,
 		src:  src,
 		base: int(sgoAST.Pos()) - 1,
+		fset: fset,
 	}
 	c.convertFile(sgoAST)
 	return bytes.Join(append(c.dstChunks, src[c.lastChunkEnd:]), nil)
@@ -398,6 +399,8 @@ type converter struct {
 	src          []byte
 	dstChunks    [][]byte
 	lastChunkEnd int
+
+	fset *token.FileSet
 }
 
 func (c *converter) convertFile(v *ast.File) {
@@ -729,7 +732,9 @@ func (c *converter) convertReturnStmt(v *ast.ReturnStmt) {
 				results = append(results, []byte("nil"))
 			case *types.Struct:
 				typ := c.lastFuncAST.Results.List[i].Type
-				results = append(results, append(c.src[typ.Pos():typ.End()], '{', '}'))
+				buf := &bytes.Buffer{}
+				printer.Fprint(buf, c.fset, typ)
+				results = append(results, append(buf.Bytes(), '{', '}'))
 			case *types.Basic:
 				info := underlying.Info()
 				switch {
