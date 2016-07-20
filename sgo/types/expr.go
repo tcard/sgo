@@ -1096,9 +1096,9 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 					etyp := fld.typ
 					check.assignment(x, etyp, "struct literal")
 				}
-				for _, v := range visited {
+				for i, v := range visited {
 					if !v {
-						if has, paths := check.hasZeroValue(typ); !has {
+						if has, paths := check.hasZeroValue(utyp.Field(i).Type()); !has {
 							check.errorHasZeroValuePaths(e.Rbrace, paths)
 						}
 						break
