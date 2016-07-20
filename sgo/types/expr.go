@@ -1098,10 +1098,14 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 				}
 				for i, v := range visited {
 					if !v {
-						if has, paths := check.hasZeroValue(utyp.Field(i).Type()); !has {
+						field := utyp.Field(i)
+						if has, paths := check.hasZeroValue(field.Type()); !has {
+							for i, path := range paths {
+								paths[i] = append([]string{field.Name()}, path...)
+							}
 							check.errorHasZeroValuePaths(e.Rbrace, paths)
 						}
-						break
+						continue
 					}
 				}
 			} else {
