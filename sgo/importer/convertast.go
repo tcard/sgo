@@ -106,6 +106,12 @@ func (c *astConverter) convertAST(node ast.Node, ann *annotations.Annotation, re
 			} else {
 				name = f.Names[0].Name
 			}
+			// Call maybeReplace here because, if it won't replace anything, we don't
+			// want to pass a replace function to convertAST as it would think that
+			// we're converting a function literal and make it optional by default.
+			if replaced := c.maybeReplace(f.Type, ann.Lookup(name), func(e ast.Expr) { f.Type = e }); replaced {
+				return
+			}
 			c.convertAST(f.Type, ann.Lookup(name), nil)
 		}
 
