@@ -173,6 +173,7 @@ func (check *Checker) assignVar(lhs ast.Expr, x *operand) Type {
 	}
 
 	var z operand
+	z.lhs = true
 	check.expr(&z, lhs)
 	if v != nil {
 		v.used = v_used // restore v.used

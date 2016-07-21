@@ -1525,7 +1525,7 @@ func (check *Checker) multiExpr(x *operand, e ast.Expr) {
 	case typexpr:
 		msg = "%s is not an expression"
 	case mapindex, commaok:
-		if !IsOptionable(x.typ) {
+		if !IsOptionable(x.typ) || x.lhs {
 			return
 		}
 		msg = "%s cannot be used as value directly; requires entangled assignment"
@@ -1573,7 +1573,7 @@ func (check *Checker) exprWithHint(x *operand, e ast.Expr, hint Type) {
 	case typexpr:
 		msg = "%s is not an expression"
 	case mapindex, commaok:
-		if !IsOptionable(x.typ) {
+		if !IsOptionable(x.typ) || x.lhs {
 			return
 		}
 		msg = "%s cannot be used as value directly; requires entangled assignment"

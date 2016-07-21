@@ -53,6 +53,7 @@ type operand struct {
 	typ  Type
 	val  constant.Value
 	id   builtinId
+	lhs  bool
 }
 
 // pos returns the position of the expression corresponding to x.
