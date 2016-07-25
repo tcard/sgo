@@ -694,6 +694,7 @@ func findSgovendoredPkgs(whence string, sgovendored map[string]func() (*annotati
 	}
 
 	for pkgPath, dirPath := range annPaths {
+		pkgPath, dirPath := pkgPath, dirPath
 		sgovendored[pkgPath] = func() (*annotations.Annotation, error) {
 			return readSgovendorDir(dirPath)
 		}

@@ -21,7 +21,8 @@ var defaultAnnotations = map[string]map[string]string{
 		"Must": `func(t ?*Template, err ?error) *Template`,
 	},
 	"strings": {
-		"NewReader": `func(s string) *Reader`,
+		"NewReader":      `func(s string) *Reader`,
+		"(*Reader).Read": `func(b []byte) (n int, err error)`,
 	},
 	"go/scanner": {
 		"ErrorList": `[]*Error`,
@@ -34,14 +35,16 @@ var defaultAnnotations = map[string]map[string]string{
 		"HandleFunc":           `func(pattern string, handler func(ResponseWriter, *Request))`,
 		"Request.URL":          `*url.URL`,
 		"ResponseWriter.Write": `func([]byte) (int, error)`,
+		"NewRequest":           `func(method, urlStr string, body ?io.Reader) (*Request \ error)`,
+		"(*Client).Do":         `func(req *Request) (resp *Response \ err error)`,
 	},
 	"encoding/json": {
 		"NewDecoder":                `func(io.Reader) *Decoder`,
 		"NewEncoder":                `func(io.Writer) *Encoder`,
-		"Marshaler.MarshalJSON":     `MarshalJSON() ([]byte \ error)`,
-		"Unmarshaler.UnmarshalJSON": `UnmarshalJSON([]byte) ?error`,
+		"Marshaler.MarshalJSON":     `func() ([]byte \ error)`,
+		"Unmarshaler.UnmarshalJSON": `func([]byte) ?error`,
 		"Marshal":                   `func(v interface{}) ([]byte \ error)`,
-		"Unmarshal":                 `(data []byte, v ?interface{}) ?error`,
+		"Unmarshal":                 `func(data []byte, v ?interface{}) ?error`,
 	},
 	"flag": {
 		"String": `func(name string, value string, usage string) *string`,
