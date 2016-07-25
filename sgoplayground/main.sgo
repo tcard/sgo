@@ -123,7 +123,7 @@ func handleMsg(msg msgType) {
 			resp.Value = strings.Join(errMsgs, "\n")
 		} else {
 			body.Add("body", w.String())
-			postResp \ err := http.PostForm("http://play.golang.org/compile", body)
+			postResp \ err := http.PostForm("https://play.golang.org/compile", body)
 			if err != nil {
 				resp.Value = err.Error()
 			} else {
