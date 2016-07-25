@@ -10,6 +10,7 @@ var defaultAnnotations = map[string]map[string]string{
 		"(*File).Write": `func(b []byte) (n int, err error)`,
 	},
 	"io": {
+		"Reader.Read":  `func([]byte) (int, error)`,
 		"Writer.Write": `func([]byte) (int, error)`,
 	},
 	"os/exec": {
@@ -47,6 +48,13 @@ var defaultAnnotations = map[string]map[string]string{
 		"Usage":  `func()`,
 	},
 	"fmt": {
-		"Errorf": `func (format string, a ...interface{}) error`,
+		"Errorf": `func(format string, a ...interface{}) error`,
+	},
+	"bytes": {
+		"(*Buffer).Read":  `func(p []byte) (n int, err error)`,
+		"(*Buffer).Write": `func(p []byte) (n int, err error)`,
+	},
+	"time": {
+		"Tick": `func(Duration) chan Time`,
 	},
 }

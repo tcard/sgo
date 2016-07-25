@@ -281,7 +281,7 @@ func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte)
 			}
 		}
 		buf := &bytes.Buffer{}
-		err = printer.Fprint(buf, fset, typ)
+		err = printer.Fprint(buf, token.NewFileSet(), typ)
 		if err != nil {
 			return
 		}

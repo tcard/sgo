@@ -165,6 +165,13 @@ func (c *astConverter) convertAST(node ast.Node, ann *annotations.Annotation, re
 		// if n.Recv != nil {
 		// 	c.convertAST(n.Recv, nil)
 		// }
+
+		// Call maybeReplace here because, if it won't replace anything, we don't
+		// want to pass a replace function to convertAST as it would think that
+		// we're converting a function literal and make it optional by default.
+		if replaced := c.maybeReplace(n.Type, ann, func(e ast.Expr) { n.Type = e.(*ast.FuncType) }); replaced {
+			return
+		}
 		c.convertAST(n.Type, nil, nil)
 
 	case *ast.File:
