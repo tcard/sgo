@@ -39,7 +39,7 @@ _ = *s <-- OK! You checked that err is nil, and thus s is usable.
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 
-- [Installation](#a-quick-comparison-with-plain-go)
+- [Installation](#installation)
 - [A quick comparison with plain Go](#a-quick-comparison-with-plain-go)
 - [The billion dollar mistake](#the-billion-dollar-mistake)
 - [Optional types](#optional-types)
