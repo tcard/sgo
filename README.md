@@ -39,6 +39,7 @@ _ = *s <-- OK! You checked that err is nil, and thus s is usable.
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
 
+- [Installation](#a-quick-comparison-with-plain-go)
 - [A quick comparison with plain Go](#a-quick-comparison-with-plain-go)
 - [The billion dollar mistake](#the-billion-dollar-mistake)
 - [Optional types](#optional-types)
@@ -56,6 +57,14 @@ _ = *s <-- OK! You checked that err is nil, and thus s is usable.
 - [Tooling](#tooling)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+## Installation
+
+Provided you've [correctly set up Go](https://golang.org/doc/install), this should work:
+
+```
+go get github.com/tcard/sgo
+```
 
 ## A quick comparison with plain Go
 
