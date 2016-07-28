@@ -17,8 +17,9 @@ var defaultAnnotations = map[string]map[string]string{
 		"Command": `func (name string, arg ...string) *Cmd`,
 	},
 	"html/template": {
-		"New":  `func(name string) *Template`,
-		"Must": `func(t ?*Template, err ?error) *Template`,
+		"New":             `func(name string) *Template`,
+		"Must":            `func(t ?*Template, err ?error) *Template`,
+		"(*Template).New": `func(name string) *Template`,
 	},
 	"strings": {
 		"NewReader":      `func(s string) *Reader`,
@@ -37,6 +38,10 @@ var defaultAnnotations = map[string]map[string]string{
 		"ResponseWriter.Write": `func([]byte) (int, error)`,
 		"NewRequest":           `func(method, urlStr string, body ?io.Reader) (*Request \ error)`,
 		"(*Client).Do":         `func(req *Request) (resp *Response \ err error)`,
+		"FileSystem.Open":      `func(name string) (File \ error)`,
+		"FileServer":           `func(root FileSystem) Handler`,
+		"StripPrefix":          `func(prefix string, h Handler) Handler`,
+		"ProxyFromEnvironment": `func(req *Request) (*url.URL \ error)`,
 	},
 	"encoding/json": {
 		"NewDecoder":                `func(io.Reader) *Decoder`,
@@ -58,6 +63,13 @@ var defaultAnnotations = map[string]map[string]string{
 		"(*Buffer).Write": `func(p []byte) (n int, err error)`,
 	},
 	"time": {
-		"Tick": `func(Duration) chan Time`,
+		"Tick":  `func(Duration) chan Time`,
+		"After": `func(Duration) chan Time`,
+	},
+	"reflect": {
+		"TypeOf":           `func(interface{}) Type`,
+		"Type.Elem":        `func() Type`,
+		"Type.Key":         `func() Type`,
+		"StructField.Type": `Type`,
 	},
 }
