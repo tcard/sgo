@@ -21,6 +21,12 @@ var defaultAnnotations = map[string]map[string]string{
 		"Must":            `func(t ?*Template, err ?error) *Template`,
 		"(*Template).New": `func(name string) *Template`,
 	},
+	"text/template": {
+		"New":               `func(name string) *Template`,
+		"Must":              `func(t ?*Template, err ?error) *Template`,
+		"(*Template).New":   `func(name string) *Template`,
+		"(*Template).Parse": `func(text string) (*Template \ error)`,
+	},
 	"strings": {
 		"NewReader":      `func(s string) *Reader`,
 		"(*Reader).Read": `func(b []byte) (n int, err error)`,
@@ -71,5 +77,16 @@ var defaultAnnotations = map[string]map[string]string{
 		"Type.Elem":        `func() Type`,
 		"Type.Key":         `func() Type`,
 		"StructField.Type": `Type`,
+	},
+	"strconv": {
+		"Atoi":      `func(s string) (int \ error)`,
+		"ParseUint": `func(s string, base int, bitSize int) (n uint64 \ err error)`,
+	},
+	"go/token": {
+		"NewFileSet":         `func() *FileSet`,
+		"(*FileSet).AddFile": `func(filename string, base, size int) *File`,
+	},
+	"go/ast": {
+		"NewScope": `func(?*Scope) *Scope`,
 	},
 }
