@@ -60,7 +60,7 @@ func (c *astConverter) convertAST(node ast.Node, ann *annotations.Annotation, re
 		if !ok {
 			break
 		}
-		if replace != nil && types.IsInterface(tn.Type()) {
+		if replace != nil && types.IsOptionable(tn.Type()) {
 			replace(&ast.OptionalType{Elt: n})
 		}
 
@@ -161,10 +161,15 @@ func (c *astConverter) convertAST(node ast.Node, ann *annotations.Annotation, re
 		}
 
 	case *ast.FuncDecl:
-		// https://github.com/tcard/sgo/issues/13
-		// if n.Recv != nil {
-		// 	c.convertAST(n.Recv, nil)
-		// }
+		if n.Recv != nil {
+			recv := n.Recv.List[0]
+			switch typ := recv.Type.(type) {
+			case *ast.StarExpr:
+				recv.Type = &ast.OptionalType{Elt: typ}
+			case *ast.Ident:
+				c.convertAST(recv.Type, nil, func(e ast.Expr) { recv.Type = e })
+			}
+		}
 
 		// Call maybeReplace here because, if it won't replace anything, we don't
 		// want to pass a replace function to convertAST as it would think that
