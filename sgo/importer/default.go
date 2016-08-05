@@ -76,17 +76,22 @@ var defaultAnnotations = map[string]map[string]string{
 		"TypeOf":           `func(interface{}) Type`,
 		"Type.Elem":        `func() Type`,
 		"Type.Key":         `func() Type`,
+		"Value.Interface":  `func() interface{}`,
 		"StructField.Type": `Type`,
 	},
 	"strconv": {
 		"Atoi":      `func(s string) (int \ error)`,
 		"ParseUint": `func(s string, base int, bitSize int) (n uint64 \ err error)`,
+		"ParseInt":  `func(s string, base int, bitSize int) (n int64 \ err error)`,
+		"Unquote":   `func(s string) (t string \ err error)`,
 	},
 	"go/token": {
 		"NewFileSet":         `func() *FileSet`,
 		"(*FileSet).AddFile": `func(filename string, base, size int) *File`,
 	},
 	"go/ast": {
-		"NewScope": `func(?*Scope) *Scope`,
+		"NewScope":       `func(?*Scope) *Scope`,
+		"NewObj":         `func(kind ObjKind, name string) *Object`,
+		"BlockStmt.List": `[]Stmt`,
 	},
 }
