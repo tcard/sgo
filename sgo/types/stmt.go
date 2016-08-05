@@ -27,6 +27,39 @@ func (check *Checker) funcBody(decl *declInfo, name string, sig *Signature, body
 	sig.scope.pos = body.Pos()
 	sig.scope.end = body.End()
 
+	// We need to clone the scope here so that, when changing the type of a
+	// parameter inside the function body (e. g.. when doing `if x != nil { return }`
+	// for optionals), we don't mutate the *Var in its fixed scope, which
+	// would affect further calls to the same function!
+
+	scope := NewScope(sig.scope, sig.scope.pos, sig.scope.end, sig.scope.comment)
+	for _, v := range sig.scope.elems {
+		scope.Insert(v)
+	}
+
+	if sig.params != nil {
+		for _, param := range sig.params.vars {
+			if _, ok := scope.elems[param.name]; ok {
+				delete(scope.elems, param.name)
+			}
+			scope.Insert(NewParam(param.pos, param.pkg, param.name, param.typ))
+		}
+	}
+	if sig.results != nil {
+		for _, param := range sig.results.vars {
+			if _, ok := scope.elems[param.name]; ok {
+				delete(scope.elems, param.name)
+			}
+			scope.Insert(NewParam(param.pos, param.pkg, param.name, param.typ))
+		}
+	}
+	if sig.recv != nil {
+		if _, ok := scope.elems[sig.recv.name]; ok {
+			delete(scope.elems, sig.recv.name)
+		}
+		scope.Insert(NewParam(sig.recv.pos, sig.recv.pkg, sig.recv.name, sig.recv.typ))
+	}
+
 	// save/restore current context and setup function context
 	// (and use 0 indentation at function start)
 	defer func(ctxt context, indent int) {
@@ -35,7 +68,7 @@ func (check *Checker) funcBody(decl *declInfo, name string, sig *Signature, body
 	}(check.context, check.indent)
 	check.context = context{
 		decl:  decl,
-		scope: sig.scope,
+		scope: scope,
 		sig:   sig,
 	}
 	check.indent = 0
