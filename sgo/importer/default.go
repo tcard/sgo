@@ -69,8 +69,10 @@ var defaultAnnotations = map[string]map[string]string{
 		"(*Buffer).Write": `func(p []byte) (n int, err error)`,
 	},
 	"time": {
-		"Tick":  `func(Duration) chan Time`,
-		"After": `func(Duration) chan Time`,
+		"Tick":      `func(Duration) chan Time`,
+		"After":     `func(Duration) chan Time`,
+		"NewTicker": `func(Duration) *Ticker`,
+		"Ticker.C":  `<-chan Time`,
 	},
 	"reflect": {
 		"TypeOf":           `func(interface{}) Type`,
