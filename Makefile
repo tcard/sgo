@@ -8,4 +8,4 @@ revision:
 	@echo "var SGoRevision = \"`git log | head -n 1 | cut -d ' ' -f 2`\"" >> sgo/revision.go
 
 sgoinstall:
-	sgo install
+	sgo install ./...
