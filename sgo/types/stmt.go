@@ -441,7 +441,14 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				// list in a "return" statement if a different entity (constant, type, or variable)
 				// with the same name as a result parameter is in scope at the place of the return."
 				for _, obj := range res.vars {
-					if _, alt := check.scope.LookupParent(obj.name, check.pos); alt != nil && alt != obj {
+					// Since we make a copy of the signature scope for the function body, the first
+					// time we find the object in the scope chain will be the copied one. We actually
+					// are interested in the original, so we need to ignore the first result.
+					sc, alt := check.scope.LookupParent(obj.name, check.pos)
+					if sc != nil {
+						sc = sc.parent
+					}
+					if _, alt = sc.LookupParent(obj.name, check.pos); alt != nil && alt != obj {
 						check.errorf(s.Pos(), "result parameter %s not in scope at return", obj.name)
 						check.errorf(alt.Pos(), "\tinner declaration of %s", obj)
 						// ok to continue

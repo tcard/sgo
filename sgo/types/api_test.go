@@ -389,7 +389,7 @@ func TestScopesInfo(t *testing.T) {
 			"file:", "func:x y",
 		}},
 		{`package p4; func _(x, y int) { x, z := 1, 2; _ = z }`, []string{
-			"file:", "func:x y z", // redeclaration of x
+			"file:", "func:x y", // redeclaration of x
 		}},
 		{`package p5; func _(x, y int) (u, _ int) { return }`, []string{
 			"file:", "func:u x y",
