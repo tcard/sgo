@@ -735,6 +735,9 @@ scanAgain:
 			tok = s.switch2(token.ASSIGN, token.EQL)
 		case '!':
 			tok = s.switch2(token.NOT, token.NEQ)
+			if tok == token.NOT {
+				insertSemi = s.insertSemi
+			}
 		case '&':
 			if s.ch == '^' {
 				s.next()
