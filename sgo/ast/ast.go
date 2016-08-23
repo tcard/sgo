@@ -352,6 +352,12 @@ type (
 		Sel *Ident // field selector
 	}
 
+	// A ForceExpr node represents an expression followed by "!".
+	ForceExpr struct {
+		X    Expr      // expression
+		Mark token.Pos // position of "?"
+	}
+
 	// An IndexExpr node represents an expression followed by an index.
 	IndexExpr struct {
 		X      Expr      // expression
@@ -507,6 +513,7 @@ func (x *CompositeLit) Pos() token.Pos {
 }
 func (x *ParenExpr) Pos() token.Pos      { return x.Lparen }
 func (x *SelectorExpr) Pos() token.Pos   { return x.X.Pos() }
+func (x *ForceExpr) Pos() token.Pos      { return x.X.Pos() }
 func (x *IndexExpr) Pos() token.Pos      { return x.X.Pos() }
 func (x *SliceExpr) Pos() token.Pos      { return x.X.Pos() }
 func (x *TypeAssertExpr) Pos() token.Pos { return x.X.Pos() }
@@ -541,6 +548,7 @@ func (x *FuncLit) End() token.Pos        { return x.Body.End() }
 func (x *CompositeLit) End() token.Pos   { return x.Rbrace + 1 }
 func (x *ParenExpr) End() token.Pos      { return x.Rparen + 1 }
 func (x *SelectorExpr) End() token.Pos   { return x.Sel.End() }
+func (x *ForceExpr) End() token.Pos      { return x.Mark }
 func (x *IndexExpr) End() token.Pos      { return x.Rbrack + 1 }
 func (x *SliceExpr) End() token.Pos      { return x.Rbrack + 1 }
 func (x *TypeAssertExpr) End() token.Pos { return x.Rparen + 1 }
@@ -573,6 +581,7 @@ func (*FuncLit) exprNode()        {}
 func (*CompositeLit) exprNode()   {}
 func (*ParenExpr) exprNode()      {}
 func (*SelectorExpr) exprNode()   {}
+func (*ForceExpr) exprNode()      {}
 func (*IndexExpr) exprNode()      {}
 func (*SliceExpr) exprNode()      {}
 func (*TypeAssertExpr) exprNode() {}
@@ -926,7 +935,7 @@ type (
 	TypeSpec struct {
 		Doc     *CommentGroup // associated documentation; or nil
 		Name    *Ident        // type name
-		Type    Expr          // *Ident, *ParenExpr, *SelectorExpr, *StarExpr, or any of the *XxxTypes
+		Type    Expr          // *Ident, *ParenExpr, *SelectorExpr, *ForceExpr, *StarExpr, or any of the *XxxTypes
 		Comment *CommentGroup // line comments; or nil
 	}
 )

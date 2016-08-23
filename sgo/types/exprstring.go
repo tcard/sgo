@@ -62,6 +62,10 @@ func WriteExpr(buf *bytes.Buffer, x ast.Expr) {
 		buf.WriteByte('.')
 		buf.WriteString(x.Sel.Name)
 
+	case *ast.ForceExpr:
+		WriteExpr(buf, x.X)
+		buf.WriteByte('!')
+
 	case *ast.IndexExpr:
 		WriteExpr(buf, x.X)
 		buf.WriteByte('[')

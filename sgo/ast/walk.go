@@ -110,6 +110,9 @@ func Walk(v Visitor, node Node) {
 		Walk(v, n.X)
 		Walk(v, n.Sel)
 
+	case *ForceExpr:
+		Walk(v, n.X)
+
 	case *IndexExpr:
 		Walk(v, n.X)
 		Walk(v, n.Index)

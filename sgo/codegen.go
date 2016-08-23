@@ -871,6 +871,9 @@ func (c *converter) convertExpr(v ast.Expr) {
 	case *ast.SelectorExpr:
 		c.convertSelectorExpr(v)
 		return
+	case *ast.ForceExpr:
+		c.convertForceExpr(v)
+		return
 	case *ast.FuncType:
 		c.convertFuncType(v)
 		return
@@ -1043,6 +1046,14 @@ func (c *converter) convertOptionalType(v *ast.OptionalType) {
 	}
 	c.putChunks(int(v.Pos()), c.src[c.lastChunkEnd:int(v.Pos())-1-c.base])
 	c.convertExpr(v.Elt)
+}
+
+func (c *converter) convertForceExpr(v *ast.ForceExpr) {
+	if v == nil {
+		return
+	}
+	c.convertExpr(v.X)
+	c.putChunks(int(v.End()), c.src[c.lastChunkEnd:int(v.End())-1-c.base])
 }
 
 func (c *converter) convertUnaryExpr(v *ast.UnaryExpr) {

@@ -1246,6 +1246,14 @@ func (p *parser) parseSelector(x ast.Expr) ast.Expr {
 	return &ast.SelectorExpr{X: x, Sel: sel}
 }
 
+func (p *parser) parseForce(x ast.Expr) ast.Expr {
+	if p.trace {
+		defer un(trace(p, "Force"))
+	}
+
+	return &ast.ForceExpr{X: x, Mark: p.expect(token.NOT)}
+}
+
 func (p *parser) parseTypeAssertion(x ast.Expr) ast.Expr {
 	if p.trace {
 		defer un(trace(p, "TypeAssertion"))
@@ -1437,6 +1445,7 @@ func (p *parser) checkExpr(x ast.Expr) ast.Expr {
 	case *ast.ParenExpr:
 		panic("unreachable")
 	case *ast.SelectorExpr:
+	case *ast.ForceExpr:
 	case *ast.IndexExpr:
 	case *ast.SliceExpr:
 	case *ast.TypeAssertExpr:
@@ -1577,6 +1586,8 @@ L:
 			} else {
 				break L
 			}
+		case token.NOT:
+			x = p.parseForce(p.checkExpr(x))
 		default:
 			break L
 		}

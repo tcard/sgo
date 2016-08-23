@@ -801,6 +801,10 @@ func (p *printer) expr1(expr ast.Expr, prec1, depth int) {
 	case *ast.SelectorExpr:
 		p.selectorExpr(x, depth, false)
 
+	case *ast.ForceExpr:
+		p.expr1(x.X, token.HighestPrec, depth)
+		p.print(x.Mark, token.NOT)
+
 	case *ast.TypeAssertExpr:
 		p.expr1(x.X, token.HighestPrec, depth)
 		p.print(token.PERIOD, x.Lparen, token.LPAREN)

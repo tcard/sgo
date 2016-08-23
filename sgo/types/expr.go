@@ -378,7 +378,8 @@ func (check *Checker) updateExprType(x ast.Expr, typ Type, final bool) {
 		*ast.FuncType,
 		*ast.InterfaceType,
 		*ast.MapType,
-		*ast.ChanType:
+		*ast.ChanType,
+		*ast.ForceExpr:
 		// These expression are never untyped - nothing to do.
 		// The respective sub-expressions got their final types
 		// upon assignment or use.
@@ -1456,6 +1457,18 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 		// times the same expression and type are recorded. It is also not a
 		// performance issue because we only reach here for composite literal
 		// types, which are comparatively rare.
+
+	case *ast.ForceExpr:
+		check.expr(x, e.X)
+		if x.mode == invalid {
+			goto Error
+		}
+		switch typ := x.typ.(type) {
+		case *Optional:
+			x.typ = typ.elem
+		default:
+			check.invalidOp(x.pos(), "%s is not an optional", x)
+		}
 
 	default:
 		panic(fmt.Sprintf("%s: unknown expression type %T", check.fset.Position(e.Pos()), e))
