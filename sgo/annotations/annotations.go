@@ -1,6 +1,8 @@
 // Package annotations provides utilities to work with SGo annotation files.
 package annotations
 
+import "strings"
+
 // TODO: Translate this file to SGo when we have optional method receivers.
 
 type Annotation struct {
@@ -25,6 +27,17 @@ func (a *Annotation) Type() (string, bool) {
 		return "", false
 	}
 	return a.typ, true
+}
+
+func (a *Annotation) String() string {
+	if typ, ok := a.Type(); ok {
+		return "type: " + typ
+	}
+	var ks []string
+	for k, _ := range a.anns {
+		ks = append(ks, k)
+	}
+	return a.cursor + " -> [" + strings.Join(ks, ", ") + "]"
 }
 
 func (a *Annotation) Lookup(name string) *Annotation {

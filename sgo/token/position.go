@@ -327,6 +327,8 @@ type FileSet struct {
 }
 
 // NewFileSet creates a new file set.
+//
+// For SGo: func() *FileSet
 func NewFileSet() *FileSet {
 	return &FileSet{
 		base: 1, // 0 == NoPos

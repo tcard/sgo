@@ -38,6 +38,9 @@ func (c *astConverter) convertAST(node ast.Node, ann *annotations.Annotation, re
 		} else {
 			ann = nil
 		}
+		if replaced := c.maybeReplace(n, ann, func(e ast.Expr) { n.Type = e }); replaced {
+			return
+		}
 		c.convertAST(n.Type, ann, func(e ast.Expr) { n.Type = e })
 
 	case *ast.FieldList:
@@ -146,16 +149,24 @@ func (c *astConverter) convertAST(node ast.Node, ann *annotations.Annotation, re
 			case *ast.ImportSpec:
 				c.convertAST(s, nil, nil)
 			case *ast.ValueSpec:
-				if replace == nil { // First time.
-					c.convertAST(n, ann.Lookup(s.Names.List[0].Name), func(e ast.Expr) { s.Type = e })
-				} else { // Second time.
-					c.convertAST(s, ann, replace)
+				if len(n.Specs) == 1 {
+					if replace == nil { // First time.
+						c.convertAST(n, ann.Lookup(s.Names.List[0].Name), func(e ast.Expr) { s.Type = e })
+					} else { // Second time.
+						c.convertAST(s, ann, replace)
+					}
+				} else {
+					c.convertAST(s, ann.Lookup(s.Names.List[0].Name), func(e ast.Expr) { s.Type = e })
 				}
 			case *ast.TypeSpec:
-				if replace == nil { // First time.
-					c.convertAST(n, ann.Lookup(s.Name.Name), func(e ast.Expr) { s.Type = e })
-				} else { // Second time.
-					c.convertAST(s, ann, replace)
+				if len(n.Specs) == 1 {
+					if replace == nil && len(n.Specs) == 1 { // First time.
+						c.convertAST(n, ann.Lookup(s.Name.Name), func(e ast.Expr) { s.Type = e })
+					} else { // Second time.
+						c.convertAST(s, ann, replace)
+					}
+				} else {
+					c.convertAST(s, ann.Lookup(s.Name.Name), func(e ast.Expr) { s.Type = e })
 				}
 			}
 		}

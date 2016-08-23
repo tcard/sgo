@@ -854,6 +854,11 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			case *Map:
 				key = typ.key
 				val = typ.elem
+			case *Optional:
+				if mtyp, ok := typ.elem.(*Map); ok {
+					key = mtyp.key
+					val = mtyp.elem
+				}
 			case *Chan:
 				key = typ.elem
 				val = Typ[Invalid]

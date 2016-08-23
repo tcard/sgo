@@ -6,12 +6,13 @@ var defaultAnnotations = map[string]map[string]string{
 		"Stdout":        `*File`,
 		"Stderr":        `*File`,
 		"Create":        `func(name string) (*File \ error)`,
-		"(*File).Read":  `func(b []byte) (n int, err error)`,
-		"(*File).Write": `func(b []byte) (n int, err error)`,
+		"Open":          `func(name string) (*File \ error)`,
+		"(*File).Read":  `func(b []byte) (n int, err ?error)`,
+		"(*File).Write": `func(b []byte) (n int, err ?error)`,
 	},
 	"io": {
-		"Reader.Read":  `func([]byte) (int, error)`,
-		"Writer.Write": `func([]byte) (int, error)`,
+		"Reader.Read":  `func([]byte) (int, ?error)`,
+		"Writer.Write": `func([]byte) (int, ?error)`,
 	},
 	"os/exec": {
 		"Command": `func (name string, arg ...string) *Cmd`,
@@ -29,7 +30,7 @@ var defaultAnnotations = map[string]map[string]string{
 	},
 	"strings": {
 		"NewReader":      `func(s string) *Reader`,
-		"(*Reader).Read": `func(b []byte) (n int, err error)`,
+		"(*Reader).Read": `func(b []byte) (n int, err ?error)`,
 	},
 	"go/scanner": {
 		"ErrorList": `[]*Error`,
@@ -41,7 +42,7 @@ var defaultAnnotations = map[string]map[string]string{
 		"PostForm":             `func(url string, data url.Values) (resp *Response \ err error)`,
 		"HandleFunc":           `func(pattern string, handler func(ResponseWriter, *Request))`,
 		"Request.URL":          `*url.URL`,
-		"ResponseWriter.Write": `func([]byte) (int, error)`,
+		"ResponseWriter.Write": `func([]byte) (int, ?error)`,
 		"NewRequest":           `func(method, urlStr string, body ?io.Reader) (*Request \ error)`,
 		"(*Client).Do":         `func(req *Request) (resp *Response \ err error)`,
 		"FileSystem.Open":      `func(name string) (File \ error)`,
@@ -65,8 +66,8 @@ var defaultAnnotations = map[string]map[string]string{
 		"Errorf": `func(format string, a ...interface{}) error`,
 	},
 	"bytes": {
-		"(*Buffer).Read":  `func(p []byte) (n int, err error)`,
-		"(*Buffer).Write": `func(p []byte) (n int, err error)`,
+		"(*Buffer).Read":  `func(p []byte) (n int, err ?error)`,
+		"(*Buffer).Write": `func(p []byte) (n int, err ?error)`,
 	},
 	"time": {
 		"Tick":      `func(Duration) chan Time`,
@@ -95,10 +96,15 @@ var defaultAnnotations = map[string]map[string]string{
 		"(*FileSet).AddFile": `func(filename string, base, size int) *File`,
 	},
 	"go/ast": {
+		"FuncLit.Type":      `*FuncType`,
+		"FuncLit.Body":      `*BlockStmt`,
 		"NewScope":          `func(?*Scope) *Scope`,
 		"NewObj":            `func(kind ObjKind, name string) *Object`,
 		"BlockStmt.List":    `[]Stmt`,
 		"SelectorExpr.Sel":  `Ident`,
 		"CompositeLit.Elts": `[]Expr`,
+		"FuncType.Params":   `*FieldList`,
+		"FieldList.List":    `[]*Field`,
+		"Field.Names":       `[]*Ident`,
 	},
 }

@@ -1,5 +1,3 @@
-// +build disabled
-
 // Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -10,13 +8,13 @@ package types_test
 
 import (
 	"fmt"
-	"internal/testenv"
 	"sort"
 	"strings"
 	"testing"
 
 	"github.com/tcard/sgo/sgo/ast"
 	"github.com/tcard/sgo/sgo/importer"
+	"github.com/tcard/sgo/sgo/internal/testenv"
 	"github.com/tcard/sgo/sgo/parser"
 
 	. "github.com/tcard/sgo/sgo/types"
@@ -29,7 +27,7 @@ func TestIssue5770(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	conf := Config{Importer: importer.Default()}
+	conf := Config{Importer: importer.Default([]*ast.File{f})}
 	_, err = conf.Check(f.Name.Name, fset, []*ast.File{f}, nil) // do not crash
 	want := "undeclared name: T"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -47,7 +45,6 @@ var (
 	_ = uint32(32 << s)
 	_ = uint64(64 << s + s)
 	_ = (interface{})("foo")
-	_ = (interface{})(nil)
 )`
 	f, err := parser.ParseFile(fset, "", src, 0)
 	if err != nil {
@@ -76,10 +73,6 @@ var (
 				want = Typ[Uint] // because of "+ s", s is of type uint
 			case `"foo"`:
 				want = Typ[String]
-			}
-		case *ast.Ident:
-			if x.Name == "nil" {
-				want = Typ[UntypedNil]
 			}
 		}
 		if want != nil && !Identical(tv.Type, want) {
@@ -221,7 +214,7 @@ func TestIssue13898(t *testing.T) {
 	const src0 = `
 package main
 
-import "go/types"
+import "github.com/tcard/sgo/sgo/types"
 
 func main() {
 	var info types.Info
@@ -235,8 +228,8 @@ func main() {
 package main
 
 import (
-	"go/types"
-	_ "go/importer"
+	"github.com/tcard/sgo/sgo/types"
+	_ "github.com/tcard/sgo/sgo/importer"
 )
 
 func main() {
@@ -252,8 +245,8 @@ func main() {
 package main
 
 import (
-	_ "go/importer"
-	"go/types"
+	_ "github.com/tcard/sgo/sgo/importer"
+	"github.com/tcard/sgo/sgo/types"
 )
 
 func main() {
@@ -268,7 +261,7 @@ func main() {
 		if err != nil {
 			t.Fatal(err)
 		}
-		cfg := Config{Importer: importer.Default()}
+		cfg := Config{Importer: importer.Default([]*ast.File{f})}
 		info := Info{Uses: make(map[*ast.Ident]Object)}
 		_, err = cfg.Check("main", fset, []*ast.File{f}, &info)
 		if err != nil {

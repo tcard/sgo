@@ -161,6 +161,8 @@ type Info struct {
 	// Identifiers on the lhs of declarations (i.e., the identifiers
 	// which are being declared) are collected in the Defs map.
 	// Identifiers denoting packages are collected in the Uses maps.
+	//
+	// For SGo: ?map[ast.Expr]TypeAndValue
 	Types map[ast.Expr]TypeAndValue
 
 	// Defs maps identifiers to the objects they define (including
@@ -172,6 +174,8 @@ type Info struct {
 	// For an anonymous field, Defs returns the field *Var it defines.
 	//
 	// Invariant: Defs[id] == nil || Defs[id].Pos() == id.Pos()
+	//
+	// For SGo: ?map[*ast.Ident]Object
 	Defs map[*ast.Ident]Object
 
 	// Uses maps identifiers to the objects they denote.
@@ -179,6 +183,8 @@ type Info struct {
 	// For an anonymous field, Uses returns the *TypeName it denotes.
 	//
 	// Invariant: Uses[id].Pos() != id.Pos()
+	//
+	// For SGo: ?map[*ast.Ident]Object
 	Uses map[*ast.Ident]Object
 
 	// Implicits maps nodes to their implicitly declared objects, if any.
@@ -190,10 +196,13 @@ type Info struct {
 	//	*ast.CaseClause    type-specific *Var for each type switch case clause (incl. default)
 	//      *ast.Field         anonymous parameter *Var
 	//
+	// For SGo: ?map[ast.Node]Object
 	Implicits map[ast.Node]Object
 
 	// Selections maps selector expressions (excluding qualified identifiers)
 	// to their corresponding selections.
+	//
+	// For SGo: ?map[*ast.SelectorExpr]*Selection
 	Selections map[*ast.SelectorExpr]*Selection
 
 	// Scopes maps ast.Nodes to the scopes they define. Package scopes are not
@@ -219,6 +228,7 @@ type Info struct {
 	//	*ast.ForStmt
 	//	*ast.RangeStmt
 	//
+	// For SGo: ?map[ast.Node]*Scope
 	Scopes map[ast.Node]*Scope
 
 	// InitOrder is the list of package-level initializers in the order in which
@@ -226,6 +236,8 @@ type Info struct {
 	// initialization dependency appear in topological order, the others appear
 	// in source order. Variables without an initialization expression do not
 	// appear in this list.
+	//
+	// For SGo: []*Initializer
 	InitOrder []*Initializer
 }
 

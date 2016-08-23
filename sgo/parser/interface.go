@@ -9,13 +9,14 @@ package parser
 import (
 	"bytes"
 	"errors"
-	"github.com/tcard/sgo/sgo/ast"
-	"github.com/tcard/sgo/sgo/token"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/tcard/sgo/sgo/ast"
+	"github.com/tcard/sgo/sgo/token"
 )
 
 // If src != nil, readSource converts src to a []byte if possible;
@@ -81,6 +82,7 @@ const (
 // representing the fragments of erroneous source code). Multiple errors
 // are returned via a scanner.ErrorList which is sorted by file position.
 //
+// For SGo: func(fset *token.FileSet, filename string, src interface{}, mode Mode) (f *ast.File \ err error)
 func ParseFile(fset *token.FileSet, filename string, src interface{}, mode Mode) (f *ast.File, err error) {
 	// get source
 	text, err := readSource(filename, src)
