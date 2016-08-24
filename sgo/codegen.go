@@ -163,10 +163,11 @@ func TranslateFilesFrom(whence string, files ...NamedFile) ([][]byte, []error) {
 		return nil, errs
 	}
 
+	oldFset := fset
 	fset = token.NewFileSet() // fileWithAnnotationComments will reparse.
 	for i, p := range parsed {
 		var err error
-		srcs[i], parsed[i], err = fileWithAnnotationComments(p, fset, srcs[i])
+		srcs[i], parsed[i], err = fileWithAnnotationComments(p, fset, oldFset, srcs[i])
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -258,7 +259,7 @@ func translate(info *types.Info, srcs [][]byte, sgoFiles []*ast.File, fset *toke
 	return dsts
 }
 
-func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte) ([]byte, *ast.File, error) {
+func fileWithAnnotationComments(file *ast.File, fset, oldFset *token.FileSet, src []byte) ([]byte, *ast.File, error) {
 	// TODO: So this is an extremely hacky way of doing this. We're going to
 	// add the comments directly to the source comments, as text, and then
 	// we're going to re-parse it. This is because I tried manipulating the
@@ -285,7 +286,7 @@ func fileWithAnnotationComments(file *ast.File, fset *token.FileSet, src []byte)
 		if err != nil {
 			return
 		}
-		pos := int(node.Pos() - file.Pos())
+		pos := int(node.Pos()) - oldFset.File(file.Pos()).Base()
 		var space []byte
 		for i := pos - 1; i >= 0 && (src[i] == ' ' || src[i] == '\t'); i-- {
 			space = append([]byte{src[i]}, space...)
