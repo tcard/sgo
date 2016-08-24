@@ -49,6 +49,7 @@ var defaultAnnotations = map[string]map[string]string{
 		"FileServer":           `func(root FileSystem) Handler`,
 		"StripPrefix":          `func(prefix string, h Handler) Handler`,
 		"ProxyFromEnvironment": `func(req *Request) (*url.URL \ error)`,
+		"HandlerFunc":          `func(ResponseWriter, *Request)`,
 	},
 	"encoding/json": {
 		"NewDecoder":                `func(io.Reader) *Decoder`,
