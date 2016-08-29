@@ -2,4 +2,4 @@
 
 package sgo
 
-var SGoRevision = "debe8ba0bb2bf0ff199db7fc52b33d1422a9457c"
+var SGoRevision = "840e976986c338417d361751109db54f55a3fadb"
