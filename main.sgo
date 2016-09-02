@@ -29,7 +29,7 @@ func main() {
 
 	switch os.Args[1] {
 	case "version":
-		fmt.Println("sgo version 0.6 (compatible with go1.6)")
+		fmt.Println("sgo version 0.7 (compatible with go1.7)")
 		return
 	case "run":
 		if len(extraArgs) == 0 {

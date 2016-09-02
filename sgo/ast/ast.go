@@ -164,7 +164,7 @@ func (g *CommentGroup) Text() string {
 	}
 	comments := make([]string, len(g.List))
 	for i, c := range g.List {
-		comments[i] = string(c.Text)
+		comments[i] = c.Text
 	}
 
 	lines := make([]string, 0, 10) // most comments are less than 10 lines
@@ -499,7 +499,7 @@ type (
 )
 
 // Pos and End implementations for expression/type nodes.
-//
+
 func (x *BadExpr) Pos() token.Pos  { return x.From }
 func (x *Ident) Pos() token.Pos    { return x.NamePos }
 func (x *Ellipsis) Pos() token.Pos { return x.Ellipsis }
@@ -796,7 +796,7 @@ type (
 )
 
 // Pos and End implementations for statement nodes.
-//
+
 func (s *BadStmt) Pos() token.Pos        { return s.From }
 func (s *DeclStmt) Pos() token.Pos       { return s.Decl.Pos() }
 func (s *EmptyStmt) Pos() token.Pos      { return s.Semicolon }
@@ -941,7 +941,7 @@ type (
 )
 
 // Pos and End implementations for spec nodes.
-//
+
 func (s *ImportSpec) Pos() token.Pos {
 	if s.Name != nil {
 		return s.Name.Pos()
@@ -1018,7 +1018,7 @@ type (
 )
 
 // Pos and End implementations for declaration nodes.
-//
+
 func (d *BadDecl) Pos() token.Pos  { return d.From }
 func (d *GenDecl) Pos() token.Pos  { return d.TokPos }
 func (d *FuncDecl) Pos() token.Pos { return d.Type.Pos() }
