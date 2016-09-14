@@ -58,7 +58,20 @@ func (check *Checker) objDecl(obj Object, def *Named, path []*TypeName) {
 	d := check.objMap[obj]
 	if d == nil {
 		check.dump("%s: %s should have been declared", obj.Pos(), obj.Name())
-		unreachable()
+		// unreachable()
+		switch obj := obj.(type) {
+		case *Const:
+			obj.typ = Typ[Invalid]
+		case *Var:
+			obj.typ = Typ[Invalid]
+		case *TypeName:
+			obj.typ = Typ[Invalid]
+		case *Func:
+			obj.typ = Typ[Invalid]
+		default:
+			unreachable()
+		}
+		return
 	}
 
 	// save/restore current context and setup object context
