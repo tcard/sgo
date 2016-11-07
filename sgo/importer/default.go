@@ -50,6 +50,7 @@ var defaultAnnotations = map[string]map[string]string{
 		"StripPrefix":          `func(prefix string, h Handler) Handler`,
 		"ProxyFromEnvironment": `func(req *Request) (*url.URL \ error)`,
 		"HandlerFunc":          `func(ResponseWriter, *Request)`,
+		"Handler.ServeHTTP":    `func(ResponseWriter, *Request)`,
 	},
 	"encoding/json": {
 		"NewDecoder":                `func(io.Reader) *Decoder`,
@@ -120,7 +121,7 @@ var defaultAnnotations = map[string]map[string]string{
 		"NewScope":          `func(?*Scope) *Scope`,
 		"NewObj":            `func(kind ObjKind, name string) *Object`,
 		"BlockStmt.List":    `[]Stmt`,
-		"SelectorExpr.Sel":  `Ident`,
+		"SelectorExpr.Sel":  `*Ident`,
 		"CompositeLit.Elts": `[]Expr`,
 		"FuncType.Params":   `*FieldList`,
 		"FieldList.List":    `[]*Field`,
