@@ -198,12 +198,17 @@ var data = []entry{
 }
 
 func TestFiles(t *testing.T) {
+	t.Parallel()
 	for _, e := range data {
 		source := filepath.Join(dataDir, e.source)
 		golden := filepath.Join(dataDir, e.golden)
-		check(t, source, golden, e.mode)
-		// TODO(gri) check that golden is idempotent
-		//check(t, golden, golden, e.mode)
+		mode := e.mode
+		t.Run(e.source, func(t *testing.T) {
+			t.Parallel()
+			check(t, source, golden, mode)
+			// TODO(gri) check that golden is idempotent
+			//check(t, golden, golden, e.mode)
+		})
 	}
 }
 
@@ -296,6 +301,7 @@ func testComment(t *testing.T, f *ast.File, srclen int, comment *ast.Comment) {
 // even if the position information of comments introducing newlines
 // is incorrect.
 func TestBadComments(t *testing.T) {
+	t.Parallel()
 	const src = `
 // first comment - text and position changed by test
 package p
@@ -482,6 +488,7 @@ func TestStmtLists(t *testing.T) {
 }
 
 func TestBaseIndent(t *testing.T) {
+	t.Parallel()
 	// The testfile must not contain multi-line raw strings since those
 	// are not indented (because their values must not change) and make
 	// this test fail.
@@ -496,28 +503,31 @@ func TestBaseIndent(t *testing.T) {
 		panic(err) // error in test
 	}
 
-	var buf bytes.Buffer
 	for indent := 0; indent < 4; indent++ {
-		buf.Reset()
-		(&Config{Tabwidth: tabwidth, Indent: indent}).Fprint(&buf, fset, file)
-		// all code must be indented by at least 'indent' tabs
-		lines := bytes.Split(buf.Bytes(), []byte{'\n'})
-		for i, line := range lines {
-			if len(line) == 0 {
-				continue // empty lines don't have indentation
-			}
-			n := 0
-			for j, b := range line {
-				if b != '\t' {
-					// end of indentation
-					n = j
-					break
+		indent := indent
+		t.Run(fmt.Sprint(indent), func(t *testing.T) {
+			t.Parallel()
+			var buf bytes.Buffer
+			(&Config{Tabwidth: tabwidth, Indent: indent}).Fprint(&buf, fset, file)
+			// all code must be indented by at least 'indent' tabs
+			lines := bytes.Split(buf.Bytes(), []byte{'\n'})
+			for i, line := range lines {
+				if len(line) == 0 {
+					continue // empty lines don't have indentation
+				}
+				n := 0
+				for j, b := range line {
+					if b != '\t' {
+						// end of indentation
+						n = j
+						break
+					}
+				}
+				if n < indent {
+					t.Errorf("line %d: got only %d tabs; want at least %d: %q", i, n, indent, line)
 				}
 			}
-			if n < indent {
-				t.Errorf("line %d: got only %d tabs; want at least %d: %q", i, n, indent, line)
-			}
-		}
+		})
 	}
 }
 
@@ -568,6 +578,7 @@ func (l *limitWriter) Write(buf []byte) (n int, err error) {
 
 // Test whether the printer stops writing after the first error
 func TestWriteErrors(t *testing.T) {
+	t.Parallel()
 	const filename = "printer.go"
 	src, err := ioutil.ReadFile(filename)
 	if err != nil {

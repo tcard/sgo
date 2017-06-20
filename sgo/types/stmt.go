@@ -102,13 +102,19 @@ func (check *Checker) usage(scope *Scope) {
 }
 
 // stmtContext is a bitset describing which
-// control-flow statements are permissible.
+// control-flow statements are permissible,
+// and provides additional context information
+// for better error messages.
 type stmtContext uint
 
 const (
+	// permissible control-flow statements
 	breakOk stmtContext = 1 << iota
 	continueOk
 	fallthroughOk
+
+	// additional context information
+	finalSwitchCase
 )
 
 func (check *Checker) simpleStmt(s ast.Stmt) {
@@ -326,7 +332,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		}(check.scope)
 	}
 
-	inner := ctxt &^ fallthroughOk
+	inner := ctxt &^ (fallthroughOk | finalSwitchCase)
 	switch s := s.(type) {
 	case *ast.BadStmt, *ast.EmptyStmt:
 		// ignore
@@ -499,7 +505,11 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			}
 		case token.FALLTHROUGH:
 			if ctxt&fallthroughOk == 0 {
-				check.error(s.Pos(), "fallthrough statement out of place")
+				msg := "fallthrough statement out of place"
+				if ctxt&finalSwitchCase != 0 {
+					msg = "cannot fallthrough final case in switch"
+				}
+				check.error(s.Pos(), msg)
 			}
 		default:
 			check.invalidAST(s.Pos(), "branch statement: %s", s.Tok)
@@ -649,6 +659,8 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			inner := inner
 			if i+1 < len(s.Body.List) {
 				inner |= fallthroughOk
+			} else {
+				inner |= finalSwitchCase
 			}
 			check.stmtList(inner, clause.Body)
 			check.closeScope()
@@ -746,9 +758,9 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				if debugUsable {
 					fmt.Println("USABLE lhs in TypeSwitchStmt:", obj.name, fmt.Sprintf("%p", obj), obj.usable)
 				}
-				scopePos := clause.End()
-				if len(clause.Body) > 0 {
-					scopePos = clause.Body[0].Pos()
+				scopePos := clause.Pos() + token.Pos(len("default")) // for default clause (len(List) == 0)
+				if n := clause.List.Len(); n > 0 {
+					scopePos = clause.List.List[n-1].End()
 				}
 				check.declare(check.scope, nil, obj, scopePos)
 				check.recordImplicit(clause, obj)
@@ -945,12 +957,12 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 
 			// declare variables
 			if len(vars) > 0 {
+				scopePos := s.X.End()
 				for _, obj := range vars {
 					// spec: "The scope of a constant or variable identifier declared inside
 					// a function begins at the end of the ConstSpec or VarSpec (ShortVarDecl
 					// for short variable declarations) and ends at the end of the innermost
 					// containing block."
-					scopePos := s.End()
 					check.declare(check.scope, nil /* recordDef already called */, obj, scopePos)
 				}
 			} else {

@@ -543,7 +543,7 @@ func (check *Checker) convertUntyped(x *operand, target Type) {
 			if !t.Empty() {
 				goto Error
 			}
-			target = defaultType(x.typ)
+			target = Default(x.typ)
 		}
 	case *Optional:
 		if x.isNil() {
@@ -616,8 +616,8 @@ func (check *Checker) comparison(x, y *operand, op token.Token) {
 		// time will be materialized. Update the expression trees.
 		// If the current types are untyped, the materialized type
 		// is the respective default type.
-		check.updateExprType(x.expr, defaultType(x.typ), true)
-		check.updateExprType(y.expr, defaultType(y.typ), true)
+		check.updateExprType(x.expr, Default(x.typ), true)
+		check.updateExprType(y.expr, Default(y.typ), true)
 	}
 
 	// spec: "Comparison operators compare two operands and yield
@@ -1026,38 +1026,44 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 		}
 
 	case *ast.CompositeLit:
-		typ := hint
-		openArray := false
-		if e.Type != nil {
+		var typ, base Type
+
+		switch {
+		case e.Type != nil:
+			// composite literal type present - use it
 			// [...]T array types may only appear with composite literals.
 			// Check for them here so we don't have to handle ... in general.
-			typ = nil
 			if atyp, _ := e.Type.(*ast.ArrayType); atyp != nil && atyp.Len != nil {
 				if ellip, _ := atyp.Len.(*ast.Ellipsis); ellip != nil && ellip.Elt == nil {
 					// We have an "open" [...]T array type.
 					// Create a new ArrayType with unknown length (-1)
 					// and finish setting it up after analyzing the literal.
 					typ = &Array{len: -1, elem: check.typ(atyp.Elt)}
-					openArray = true
+					base = typ
+					break
 				}
 			}
-			if typ == nil {
-				typ = check.typ(e.Type)
-			}
+			typ = check.typ(e.Type)
+			base = typ
 
-			if atyp, _ := typ.Underlying().(*Array); atyp != nil && atyp.len > -1 && int64(len(e.Elts)) != atyp.len {
-				if has, paths := check.hasZeroValue(atyp); !has {
-					check.errorHasZeroValuePaths(e.End(), paths)
-				}
-			}
-		}
-		if typ == nil {
+		case hint != nil:
+			// no composite literal type present - use hint (element type of enclosing type)
+			typ = hint
+			base, _ = deref(typ.Underlying()) // *T implies &T{}
+
+		default:
 			// TODO(gri) provide better error messages depending on context
 			check.error(e.Pos(), "missing type in composite literal")
 			goto Error
 		}
 
-		switch typ, _ := deref(typ); utyp := typ.Underlying().(type) {
+		if atyp, _ := typ.Underlying().(*Array); atyp != nil && atyp.len > -1 && int64(len(e.Elts)) != atyp.len {
+			if has, paths := check.hasZeroValue(atyp); !has {
+				check.errorHasZeroValuePaths(e.End(), paths)
+			}
+		}
+
+		switch utyp := base.Underlying().(type) {
 		case *Struct:
 			if len(e.Elts) == 0 {
 				if has, paths := check.hasZeroValue(typ); !has {
@@ -1138,9 +1144,12 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 
 		case *Array:
 			n := check.indexedElts(e.Elts, utyp.elem, utyp.len)
-			// if we have an "open" [...]T array, set the length now that we know it
-			if openArray {
+			// If we have an "open" [...]T array, set the length now that we know it
+			// and record the type for [...] (usually done by check.typExpr which is
+			// not called for [...]).
+			if utyp.len < 0 {
 				utyp.len = n
+				check.recordTypeAndValue(e.Type, typexpr, utyp, nil)
 			}
 
 		case *Slice:
