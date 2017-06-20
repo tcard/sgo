@@ -127,4 +127,11 @@ var defaultAnnotations = map[string]map[string]string{
 		"FieldList.List":    `[]*Field`,
 		"Field.Names":       `[]*Ident`,
 	},
+	"go/constant": {
+		"MakeFromLiteral": `func(lit string, tok token.Token, zero uint) Value`,
+		"Uint64Val":       `func(x Value) (uint64 \ bool)`,
+	},
+	"go/format": {
+		"Source": `func(src []byte) ([]byte \ error)`,
+	},
 }
