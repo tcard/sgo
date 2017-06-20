@@ -180,6 +180,11 @@ type fromPkg struct {
 }
 
 func (c fromPkg) Import(path string) (*types.Package, error) {
+	if strings.HasPrefix(path, "golang_org/x/") {
+		// Those are at $GOROOT/src/vendor. We need to hack this for it to
+		// find it.
+		path = "vendor/" + path
+	}
 	if imported, ok := c.fromSrc.imported[path]; ok {
 		return imported, nil
 	}
