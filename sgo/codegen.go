@@ -271,7 +271,7 @@ func fileWithAnnotationComments(file *ast.File, fset, oldFset *token.FileSet, sr
 	var dstChunks [][]byte
 	var lastChunkEnd int
 	skipNextSpec := false
-	addDoc := func(node ast.Node, name *ast.Ident, typ ast.Expr) {
+	addDoc := func(node ast.Node, name *ast.Ident, typ ast.Expr, recv ast.Expr) {
 		if typ == nil {
 			return
 		}
@@ -282,6 +282,14 @@ func fileWithAnnotationComments(file *ast.File, fset, oldFset *token.FileSet, sr
 			}
 		}
 		buf := &bytes.Buffer{}
+		if recv != nil {
+			fmt.Fprint(buf, "(")
+			err = printer.Fprint(buf, token.NewFileSet(), recv)
+			if err != nil {
+				return
+			}
+			fmt.Fprint(buf, ") ")
+		}
 		err = printer.Fprint(buf, token.NewFileSet(), typ)
 		if err != nil {
 			return
@@ -297,12 +305,15 @@ func fileWithAnnotationComments(file *ast.File, fset, oldFset *token.FileSet, sr
 	}
 	var visitor visitorFunc
 	visitor = visitorFunc(func(node ast.Node) (w ast.Visitor) {
-		var typ ast.Expr
+		var typ, recv ast.Expr
 		var name *ast.Ident
 		switch node := node.(type) {
 		case *ast.FuncDecl:
 			typ = node.Type
 			name = node.Name
+			if node.Recv != nil {
+				recv = node.Recv.List[0].Type
+			}
 		case *ast.GenDecl:
 			if node.Lparen != 0 || node.Tok == token.IMPORT || node.Tok == token.CONST {
 				return visitor
@@ -329,7 +340,7 @@ func fileWithAnnotationComments(file *ast.File, fset, oldFset *token.FileSet, sr
 				if len(item.Names) > 0 {
 					name = item.Names[0]
 				}
-				addDoc(item, name, item.Type)
+				addDoc(item, name, item.Type, nil)
 			}
 			return visitor
 		case *ast.StructType:
@@ -338,7 +349,7 @@ func fileWithAnnotationComments(file *ast.File, fset, oldFset *token.FileSet, sr
 				if len(item.Names) > 0 {
 					name = item.Names[0]
 				}
-				addDoc(item, name, item.Type)
+				addDoc(item, name, item.Type, nil)
 			}
 			return visitor
 		case *ast.TypeSpec:
@@ -361,7 +372,7 @@ func fileWithAnnotationComments(file *ast.File, fset, oldFset *token.FileSet, sr
 			return visitor
 		}
 
-		addDoc(node, name, typ)
+		addDoc(node, name, typ, recv)
 		return visitor
 	})
 	ast.Walk(visitor, file)

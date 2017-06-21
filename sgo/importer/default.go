@@ -7,8 +7,8 @@ var defaultAnnotations = map[string]map[string]string{
 		"Stderr":        `*File`,
 		"Create":        `func(name string) (*File \ error)`,
 		"Open":          `func(name string) (*File \ error)`,
-		"(*File).Read":  `func(b []byte) (n int, err ?error)`,
-		"(*File).Write": `func(b []byte) (n int, err ?error)`,
+		"(*File).Read":  `(*File) func(b []byte) (n int, err ?error)`,
+		"(*File).Write": `(*File) func(b []byte) (n int, err ?error)`,
 	},
 	"io": {
 		"Reader.Read":  `func([]byte) (int, ?error)`,
@@ -20,17 +20,17 @@ var defaultAnnotations = map[string]map[string]string{
 	"html/template": {
 		"New":             `func(name string) *Template`,
 		"Must":            `func(t ?*Template, err ?error) *Template`,
-		"(*Template).New": `func(name string) *Template`,
+		"(*Template).New": `(*Template) func(name string) *Template`,
 	},
 	"text/template": {
 		"New":               `func(name string) *Template`,
 		"Must":              `func(t ?*Template, err ?error) *Template`,
-		"(*Template).New":   `func(name string) *Template`,
-		"(*Template).Parse": `func(text string) (*Template \ error)`,
+		"(*Template).New":   `(*Template) func(name string) *Template`,
+		"(*Template).Parse": `(*Template) func(text string) (*Template \ error)`,
 	},
 	"strings": {
 		"NewReader":      `func(s string) *Reader`,
-		"(*Reader).Read": `func(b []byte) (n int, err ?error)`,
+		"(*Reader).Read": `(*Reader) func(b []byte) (n int, err ?error)`,
 	},
 	"go/scanner": {
 		"ErrorList": `[]*Error`,
@@ -44,7 +44,7 @@ var defaultAnnotations = map[string]map[string]string{
 		"Request.URL":          `*url.URL`,
 		"ResponseWriter.Write": `func([]byte) (int, ?error)`,
 		"NewRequest":           `func(method, urlStr string, body ?io.Reader) (*Request \ error)`,
-		"(*Client).Do":         `func(req *Request) (resp *Response \ err error)`,
+		"(*Client).Do":         `(*Client) func(req *Request) (resp *Response \ err error)`,
 		"FileSystem.Open":      `func(name string) (File \ error)`,
 		"FileServer":           `func(root FileSystem) Handler`,
 		"StripPrefix":          `func(prefix string, h Handler) Handler`,
@@ -86,8 +86,8 @@ var defaultAnnotations = map[string]map[string]string{
 		"Errorf": `func(format string, a ...interface{}) error`,
 	},
 	"bytes": {
-		"(*Buffer).Read":  `func(p []byte) (n int, err ?error)`,
-		"(*Buffer).Write": `func(p []byte) (n int, err ?error)`,
+		"(*Buffer).Read":  `(*Buffer) func(p []byte) (n int, err ?error)`,
+		"(*Buffer).Write": `(*Buffer) func(p []byte) (n int, err ?error)`,
 	},
 	"time": {
 		"Tick":      `func(Duration) chan Time`,
@@ -113,7 +113,7 @@ var defaultAnnotations = map[string]map[string]string{
 	},
 	"go/token": {
 		"NewFileSet":         `func() *FileSet`,
-		"(*FileSet).AddFile": `func(filename string, base, size int) *File`,
+		"(*FileSet).AddFile": `(*FileSet) func(filename string, base, size int) *File`,
 	},
 	"go/ast": {
 		"FuncLit.Type":      `*FuncType`,

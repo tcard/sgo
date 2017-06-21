@@ -179,40 +179,16 @@ func ParseDir(fset *token.FileSet, path string, filter func(os.FileInfo) bool, m
 // be a valid Go (type or value) expression. Specifically, fset must not
 // be nil.
 //
-func ParseExprFrom(fset *token.FileSet, filename string, src interface{}, mode Mode) (ast.Expr, error) {
-	if fset == nil {
-		panic("parser.ParseExprFrom: no token.FileSet provided (fset == nil)")
-	}
-
-	// get source
-	text, err := readSource(filename, src)
+func ParseExprFrom(fset *token.FileSet, filename string, src interface{}, mode Mode) (e ast.Expr, err error) {
+	var p *parser
+	var recoverer func(*error)
+	p, recoverer, err = prepareExprParser(fset, filename, src, mode)
 	if err != nil {
 		return nil, err
 	}
+	defer recoverer(&err)
 
-	var p parser
-	defer func() {
-		if e := recover(); e != nil {
-			// resume same panic if it's not a bailout
-			if _, ok := e.(bailout); !ok {
-				panic(e)
-			}
-		}
-		p.errors.Sort()
-		err = p.errors.Err()
-	}()
-
-	// parse expr
-	p.init(fset, filename, text, mode)
-	// Set up pkg-level scopes to avoid nil-pointer errors.
-	// This is not needed for a correct expression x as the
-	// parser will be ok with a nil topScope, but be cautious
-	// in case of an erroneous x.
-	p.openScope()
-	p.pkgScope = p.topScope
-	e := p.parseRhsOrType()
-	p.closeScope()
-	assert(p.topScope == nil, "unbalanced scopes")
+	e = parseSingleExpr(p)
 
 	// If a semicolon was inserted, consume it;
 	// report an error if there's more tokens.
@@ -229,10 +205,103 @@ func ParseExprFrom(fset *token.FileSet, filename string, src interface{}, mode M
 	return e, nil
 }
 
+func prepareExprParser(fset *token.FileSet, filename string, src interface{}, mode Mode) (*parser, func(*error), error) {
+	if fset == nil {
+		panic("parser.ParseExprFrom: no token.FileSet provided (fset == nil)")
+	}
+
+	// get source
+	text, err := readSource(filename, src)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var p parser
+	recoverer := func(err *error) {
+		if e := recover(); e != nil {
+			// resume same panic if it's not a bailout
+			if _, ok := e.(bailout); !ok {
+				panic(e)
+			}
+		}
+		p.errors.Sort()
+		*err = p.errors.Err()
+	}
+	defer recoverer(&err)
+
+	// parse expr
+	p.init(fset, filename, text, mode)
+
+	if p.errors.Len() > 0 {
+		p.errors.Sort()
+		return nil, nil, p.errors.Err()
+	}
+
+	return &p, recoverer, nil
+}
+
+func parseSingleExpr(p *parser) ast.Expr {
+	// Set up pkg-level scopes to avoid nil-pointer errors.
+	// This is not needed for a correct expression x as the
+	// parser will be ok with a nil topScope, but be cautious
+	// in case of an erroneous x.
+	p.openScope()
+	p.pkgScope = p.topScope
+	e := p.parseRhsOrType()
+	p.closeScope()
+	assert(p.topScope == nil, "unbalanced scopes")
+	return e
+}
+
 // ParseExpr is a convenience function for obtaining the AST of an expression x.
 // The position information recorded in the AST is undefined. The filename used
 // in error messages is the empty string.
 //
 func ParseExpr(x string) (ast.Expr, error) {
 	return ParseExprFrom(token.NewFileSet(), "", []byte(x), 0)
+}
+
+// ParseMethodExprs parses a receiver ast.Expr and a FuncType.
+func ParseMethodExprs(x string) (fun *ast.FuncType, recv ast.Expr, err error) {
+	return ParseMethodExprsFrom(token.NewFileSet(), "", []byte(x), 0)
+}
+
+// ParseMethodExprsFrom parses a receiver ast.Expr and a FuncType.
+func ParseMethodExprsFrom(fset *token.FileSet, filename string, src interface{}, mode Mode) (fun *ast.FuncType, recv ast.Expr, err error) {
+	var p *parser
+	var recoverer func(*error)
+	p, recoverer, err = prepareExprParser(fset, filename, src, mode)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer recoverer(&err)
+
+	e := parseSingleExpr(p)
+	if pe, ok := e.(*ast.ParenExpr); ok {
+		recv = pe.X
+		e = parseSingleExpr(p)
+	} else {
+		assert(false, "expected receiver type")
+	}
+
+	switch e := e.(type) {
+	case *ast.FuncType:
+		fun = e
+	default:
+		assert(false, "expected function type")
+	}
+
+	// If a semicolon was inserted, consume it;
+	// report an error if there's more tokens.
+	if p.tok == token.SEMICOLON && p.lit == "\n" {
+		p.next()
+	}
+	p.expect(token.EOF)
+
+	if p.errors.Len() > 0 {
+		p.errors.Sort()
+		return nil, nil, p.errors.Err()
+	}
+
+	return fun, recv, nil
 }

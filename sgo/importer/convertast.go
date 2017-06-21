@@ -173,6 +173,13 @@ func (c *astConverter) convertAST(node ast.Node, ann *annotations.Annotation, re
 
 	case *ast.FuncDecl:
 		if n.Recv != nil {
+			if replaced := c.maybeReplaceFuncDecl(n, ann, func(fun *ast.FuncType, recv ast.Expr) {
+				n.Type = fun
+				n.Recv.List[0].Type = recv
+			}); replaced {
+				return
+			}
+
 			recv := n.Recv.List[0]
 			switch typ := recv.Type.(type) {
 			case *ast.StarExpr:
@@ -230,20 +237,62 @@ func (c *astConverter) maybeReplace(node ast.Node, ann *annotations.Annotation, 
 		}
 	}
 
+	s, ok := annFromDoc(node)
+	if !ok {
+		return false
+	}
+
+	e, err := parser.ParseExpr(s)
+	if err != nil {
+		return false
+	}
+
+	replace(e)
+	return true
+}
+
+func (c *astConverter) maybeReplaceFuncDecl(node *ast.FuncDecl, ann *annotations.Annotation, replace func(fun *ast.FuncType, recv ast.Expr)) bool {
+	if replace == nil {
+		return false
+	}
+
+	if typ, ok := ann.Type(); ok {
+		fun, recv, err := parser.ParseMethodExprs(typ)
+		if err == nil {
+			replace(fun, recv)
+			return true
+		}
+	}
+
+	s, ok := annFromDoc(node)
+	if !ok {
+		return false
+	}
+
+	fun, recv, err := parser.ParseMethodExprs(s)
+	if err != nil {
+		return false
+	}
+
+	replace(fun, recv)
+	return true
+}
+
+func annFromDoc(node ast.Node) (string, bool) {
 	n := reflect.ValueOf(node)
 
 	if n.Elem().Type().Kind() != reflect.Struct {
-		return false
+		return "", false
 	}
 
 	doc := n.Elem().FieldByName("Doc")
 	if !doc.IsValid() {
-		return false
+		return "", false
 	}
 
 	cg := doc.Interface().(*ast.CommentGroup)
 	if cg == nil {
-		return false
+		return "", false
 	}
 
 	for _, l := range cg.List {
@@ -256,15 +305,8 @@ func (c *astConverter) maybeReplace(node ast.Node, ann *annotations.Annotation, 
 			continue
 		}
 
-		ann := s[len("For SGo: "):]
-		e, err := parser.ParseExpr(ann)
-		if err != nil {
-			return false
-		}
-
-		replace(e)
-		return true
+		return s[len("For SGo: "):], true
 	}
 
-	return false
+	return "", false
 }
