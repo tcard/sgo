@@ -180,7 +180,7 @@ func DefPredeclaredTestFuncs() {
 }
 
 func init() {
-	Universe = NewScope(nil, token.NoPos, token.NoPos, "universe")
+	Universe = NewScope(nil, token.NoPos, token.NoPos, "universe", nil)
 	Unsafe = NewPackage("unsafe", "unsafe")
 	Unsafe.complete = true
 

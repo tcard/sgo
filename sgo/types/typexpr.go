@@ -33,9 +33,12 @@ func (check *Checker) ident(x *operand, e *ast.Ident, def *Named, path []*TypeNa
 		return
 	}
 
-	if !check.conf.AllowUseUninitializedVars {
-		if v, ok := obj.(*Var); ok && !v.usable {
+	if v, ok := obj.(*Var); ok {
+		if !check.conf.AllowUseUninitializedVars && !v.usable {
 			check.errorf(e.Pos(), "possibly uninitialized variable: %s", e.Name)
+		}
+		if scope.sig != check.scope.sig {
+			v.aliased = true
 		}
 	}
 
@@ -161,7 +164,7 @@ func (check *Checker) typ(e ast.Expr) Type {
 
 // funcType type-checks a function or method type.
 func (check *Checker) funcType(sig *Signature, recvPar *ast.FieldList, ftyp *ast.FuncType) {
-	scope := NewScope(check.scope, token.NoPos, token.NoPos, "function")
+	scope := NewScope(check.scope, token.NoPos, token.NoPos, "function", sig)
 	check.recordScope(ftyp, scope)
 
 	recvList, entangledRecvList, _ := check.collectParams(scope, recvPar, false)

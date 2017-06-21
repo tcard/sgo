@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"sgo/parser"
-	"sgo/token"
 	"strings"
 	"testing"
 

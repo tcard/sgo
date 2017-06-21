@@ -172,6 +172,7 @@ type Var struct {
 	isField   bool // var is struct field
 	used      bool // set if the variable was used
 	usable    bool // true; but false for refs and left-hand entangled, and then set to true when assigned or collaped
+	aliased   bool // referenced by a pointer, or captured by closure
 	collapses []*Var
 }
 
@@ -187,7 +188,7 @@ func startsUsable(typ Type) bool {
 	if typ == nil {
 		return false
 	}
-	return !isPointer(typ) && !IsInterface(typ) && !isSignature(typ) && !isMap(typ)
+	return !IsOptionable(typ)
 }
 
 func (obj *Var) setType(typ Type) {

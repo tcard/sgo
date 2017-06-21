@@ -88,6 +88,7 @@ var tests = [][]string{
 	{"testdata/gotos.src"},
 	{"testdata/labels.src"},
 	{"testdata/issues.src"},
+	{"testdata/sgoissues.src"},
 	{"testdata/blank.src"},
 }
 

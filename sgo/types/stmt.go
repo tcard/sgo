@@ -32,7 +32,7 @@ func (check *Checker) funcBody(decl *declInfo, name string, sig *Signature, body
 	// for optionals), we don't mutate the *Var in its fixed scope, which
 	// would affect further calls to the same function!
 
-	scope := NewScope(sig.scope, sig.scope.pos, sig.scope.end, sig.scope.comment)
+	scope := NewScope(sig.scope, sig.scope.pos, sig.scope.end, sig.scope.comment, sig)
 	for _, v := range sig.scope.elems {
 		scope.Insert(v)
 	}
@@ -172,7 +172,7 @@ func (check *Checker) multipleDefaults(list []ast.Stmt) {
 }
 
 func (check *Checker) openScope(s ast.Stmt, comment string) {
-	scope := NewScope(check.scope, s.Pos(), s.End(), comment)
+	scope := NewScope(check.scope, s.Pos(), s.End(), comment, nil)
 	check.recordScope(s, scope)
 	check.scope = scope
 }
@@ -1057,7 +1057,7 @@ func (checker *Checker) ifCondSideEffects(x operand) []ifCondSideEffect {
 			xOp, yOp, xId, yId = yOp, xOp, yId, xId
 		}
 
-		if isReversedOptionalUnwrap || (isOptional(xOp.typ) && yOp.isNil()) {
+		if (isReversedOptionalUnwrap || (isOptional(xOp.typ) && yOp.isNil())) && !checker.isAliasedVar(xId) {
 			eff.ident = xId
 			eff.typ = xOp.typ.Underlying().(*Optional).elem
 			eff.isNilOrTrue = v.Op == token.EQL
@@ -1114,6 +1114,14 @@ func (c *Checker) isCollapserVar(id *ast.Ident) bool {
 	_, v := c.scope.LookupParent(id.Name, token.NoPos)
 	if v, ok := v.(*Var); ok {
 		return len(v.collapses) > 0
+	}
+	return false
+}
+
+func (c *Checker) isAliasedVar(id *ast.Ident) bool {
+	_, v := c.scope.LookupParent(id.Name, token.NoPos)
+	if v, ok := v.(*Var); ok {
+		return v.aliased
 	}
 	return false
 }

@@ -28,17 +28,24 @@ type Scope struct {
 	children []*Scope
 	elems    map[string]Object // lazily allocated
 	pos, end token.Pos         // scope extent; may be invalid
-	comment  string            // for debugging only
+	sig      *Signature
+	comment  string // for debugging only
 }
 
 // NewScope returns a new, empty scope contained in the given parent
 // scope, if any. The comment is for debugging only.
-func NewScope(parent *Scope, pos, end token.Pos, comment string) *Scope {
-	s := &Scope{parent, nil, nil, pos, end, comment}
+func NewScope(parent *Scope, pos, end token.Pos, comment string, sig *Signature) *Scope {
+	s := &Scope{parent, nil, nil, pos, end, nil, comment}
 	// don't add children to Universe scope!
-	if parent != nil && parent != Universe {
-		parent.children = append(parent.children, s)
+	if parent != nil {
+		if parent != Universe {
+			parent.children = append(parent.children, s)
+		}
+		if sig == nil {
+			sig = parent.sig
+		}
 	}
+	s.sig = sig
 	return s
 }
 

@@ -169,7 +169,7 @@ func (check *Checker) collectObjects() {
 		if f := check.fset.File(file.Pos()); f != nil {
 			pos, end = token.Pos(f.Base()), token.Pos(f.Base()+f.Size())
 		}
-		fileScope := NewScope(check.pkg.scope, pos, end, check.filename(fileNo))
+		fileScope := NewScope(check.pkg.scope, pos, end, check.filename(fileNo), nil)
 		check.recordScope(file, fileScope)
 
 		for _, decl := range file.Decls {

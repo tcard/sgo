@@ -1,0 +1,35 @@
+package sgoissues
+
+func issue16() {
+	// Aliased by pointer.
+	{
+		var x ?*int = new(int)
+		var y *?*int = &x
+		_ = y
+		if x != nil {
+			_ = *x /* ERROR cannot indirect x \(variable of type \?\*int\) */
+		}
+	}
+
+	// Aliased by closure.
+	{
+		var x ?*int = new(int)
+		_ = func() {
+			x = nil
+		}
+		if x != nil {
+			_ = *x /* ERROR cannot indirect x \(variable of type \?\*int\) */
+		}
+	}
+
+	// Not aliased; should work. Add extra scope to make sure we only reject
+	// closures, not just different scopes.
+	{
+		var x ?*int = new(int)
+		{
+			if x != nil {
+				_ = *x
+			}
+		}
+	}
+}

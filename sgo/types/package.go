@@ -6,6 +6,7 @@ package types
 
 import (
 	"fmt"
+
 	"github.com/tcard/sgo/sgo/token"
 )
 
@@ -26,7 +27,7 @@ func NewPackage(path, name string) *Package {
 	if name == "_" {
 		panic("invalid package name _")
 	}
-	scope := NewScope(Universe, token.NoPos, token.NoPos, fmt.Sprintf("package %q", path))
+	scope := NewScope(Universe, token.NoPos, token.NoPos, fmt.Sprintf("package %q", path), nil)
 	return &Package{path: path, name: name, scope: scope}
 }
 

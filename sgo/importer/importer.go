@@ -248,7 +248,7 @@ func (c *converter) convertScope(dst *types.Scope, src *gotypes.Scope) {
 	}
 	for i := 0; i < src.NumChildren(); i++ {
 		child := src.Child(i)
-		newScope := types.NewScope(dst, token.Pos(child.Pos()), token.Pos(child.End()), "")
+		newScope := types.NewScope(dst, token.Pos(child.Pos()), token.Pos(child.End()), "", nil)
 		c.convertScope(newScope, child)
 	}
 }

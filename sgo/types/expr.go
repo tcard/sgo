@@ -92,6 +92,7 @@ func (check *Checker) unary(x *operand, e *ast.UnaryExpr, op token.Token) {
 		}
 		x.mode = value
 		x.typ = &Pointer{base: x.typ}
+
 		return
 
 	case token.ARROW:
@@ -1435,6 +1436,12 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 		check.expr(x, e.X)
 		if x.mode == invalid {
 			goto Error
+		}
+		if e.Op == token.AND && x.mode == variable {
+			_, obj := check.scope.LookupParent(e.X.(*ast.Ident).Name, check.pos)
+			if v, ok := obj.(*Var); ok {
+				v.aliased = true
+			}
 		}
 		check.unary(x, e, e.Op)
 		if x.mode == invalid {
