@@ -5,3 +5,5 @@ go:
 
 install:
   - go install
+
+script: go test ./sgo/...
