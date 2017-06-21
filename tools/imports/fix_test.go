@@ -5,7 +5,6 @@
 package imports
 
 import (
-	"bytes"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -916,68 +915,6 @@ func TestFindImportInternal(t *testing.T) {
 	}
 	if got != "" || rename {
 		t.Errorf(`findImportGoPath("race", Acquire ...)=%q, %t, want "", false`, got, rename)
-	}
-}
-
-func TestFindImportVendor(t *testing.T) {
-	pkgIndexOnce = &sync.Once{}
-	oldGOPATH := build.Default.GOPATH
-	build.Default.GOPATH = ""
-	defer func() {
-		build.Default.GOPATH = oldGOPATH
-	}()
-
-	_, err := os.Stat(filepath.Join(runtime.GOROOT(), "src/vendor"))
-	if err != nil {
-		t.Skip(err)
-	}
-
-	got, rename, err := findImportGoPath("hpack", map[string]bool{"HuffmanDecode": true}, filepath.Join(runtime.GOROOT(), "src/math/x.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "golang.org/x/net/http2/hpack"
-	// Pre-1.7, we temporarily had this package under "internal" - adjust want accordingly.
-	_, err = os.Stat(filepath.Join(runtime.GOROOT(), "src/vendor", want))
-	if err != nil {
-		want = filepath.Join("internal", want)
-	}
-	if got != want || rename {
-		t.Errorf(`findImportGoPath("hpack", HuffmanDecode ...)=%q, %t, want %q, false`, got, rename, want)
-	}
-
-	// should not be able to use vendor from outside that tree
-	got, rename, err = findImportGoPath("hpack", map[string]bool{"HuffmanDecode": true}, filepath.Join(runtime.GOROOT(), "x.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != "" || rename {
-		t.Errorf(`findImportGoPath("hpack", HuffmanDecode ...)=%q, %t, want "", false`, got, rename)
-	}
-}
-
-func TestProcessVendor(t *testing.T) {
-	pkgIndexOnce = &sync.Once{}
-	oldGOPATH := build.Default.GOPATH
-	build.Default.GOPATH = ""
-	defer func() {
-		build.Default.GOPATH = oldGOPATH
-	}()
-
-	_, err := os.Stat(filepath.Join(runtime.GOROOT(), "src/vendor"))
-	if err != nil {
-		t.Skip(err)
-	}
-
-	target := filepath.Join(runtime.GOROOT(), "src/math/x.go")
-	out, err := Process(target, []byte("package http\nimport \"bytes\"\nfunc f() { strings.NewReader(); hpack.HuffmanDecode() }\n"), nil)
-
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "golang.org/x/net/http2/hpack"
-	if !bytes.Contains(out, []byte(want)) {
-		t.Fatalf("Process(%q) did not add expected hpack import:\n%s", target, out)
 	}
 }
 

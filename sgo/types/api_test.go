@@ -1045,7 +1045,7 @@ func F(){
 	var a []int
 	for i, x := range /*i=undef*/ /*x=var:16*/ a /*i=var:20*/ /*x=var:20*/ { _ = i; _ = x }
 
-	var i interface{}
+	var i interface{} = 123
 	switch y := i.(type) { /*y=undef*/
 	case /*y=undef*/ int /*y=var:23*/ :
 	case float32, /*y=undef*/ float64 /*y=var:23*/ :
@@ -1214,7 +1214,7 @@ func TestCompositeLitTypes(t *testing.T) {
 		}
 
 		// test type of composite literal expression
-		rhs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec).Values[0]
+		rhs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec).Values.List[0]
 		cmptype(rhs, test.typ)
 
 		// test type of composite literal type expression
