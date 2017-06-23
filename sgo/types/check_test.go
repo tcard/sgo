@@ -256,6 +256,10 @@ func checkFiles(t *testing.T, testfiles []string) {
 	if len(testfiles) == 1 && testfiles[0] == "testdata/importC.src" {
 		conf.FakeImportC = true
 	}
+	if len(testfiles) == 1 && testfiles[0] == "testdata/sgoissues.src" {
+		conf.AllowUseUninitializedVars = false
+		conf.AllowUninitializedExprs = false
+	}
 	conf.Importer = importer.Default(files)
 	conf.Error = func(err error) {
 		if *listErrors {

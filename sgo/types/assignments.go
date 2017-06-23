@@ -214,8 +214,13 @@ func (check *Checker) assignVar(lhs ast.Expr, x *operand) Type {
 // If returnPos is valid, initVars is called to type-check the assignment of
 // return expressions, and returnPos is the position of the return statement.
 func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Pos, entangledLhs *Var) {
-	l := len(lhs)
+	check.checkVars(lhs, rhs, returnPos, entangledLhs, func(_ int, lhs *Var, x *operand, context string) Type {
+		return check.initVar(lhs, x, context)
+	})
+}
 
+func (check *Checker) checkVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Pos, entangledLhs *Var, setVar func(int, *Var, *operand, string) Type) {
+	l := len(lhs)
 	rhsIsEntangled := false
 	if rhs.EntangledPos == 0 && len(rhs.List) > 0 {
 		var x operand
@@ -239,10 +244,16 @@ func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Po
 		}
 	} else if rhs.EntangledPos == 1 {
 		// a, b \ c := \ z
+		if !returnPos.IsValid() {
+			check.error(rhs.List[0].Pos(), "right-hand side cannot be entangled in assignment")
+		}
 		rhsIsEntangled = true
 		l = 1
 	} else if rhs.EntangledPos == len(rhs.List)+1 {
 		// a, b \ c := x, y \
+		if !returnPos.IsValid() {
+			check.error(rhs.List[0].Pos(), "right-hand side cannot be entangled in assignment")
+		}
 		rhsIsEntangled = true
 		l = len(lhs)
 	} else if len(rhs.List) > 0 {
@@ -300,7 +311,7 @@ func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Po
 		lhs := []*Var{lhs[0], entangledLhs}
 		for i := range a {
 			get(&x, i)
-			a[i] = check.initVar(lhs[i], &x, context)
+			a[i] = setVar(i, lhs[i], &x, context)
 		}
 		check.recordCommaOkTypes(rhs.List[0], a)
 		return
@@ -316,19 +327,75 @@ func (check *Checker) initVars(lhs []*Var, rhs *ast.ExprList, returnPos token.Po
 			continue
 		}
 		get(&x, i)
-		check.initVar(v, &x, context)
+		setVar(i, v, &x, context)
 	}
 }
 
-func (check *Checker) assignVars(lhs, rhs []ast.Expr) {
-	l := len(lhs)
-	get, r, commaOk := unpack(func(x *operand, i int) { check.rhsMultiExpr(x, rhs[i]) }, len(rhs), l == 2)
+func (check *Checker) assignVars(lhs, rhs *ast.ExprList) {
+	entangledPos := lhs.EntangledPos
+
+	// collect lhs variables
+	var lhsVars = make([]*Var, 0, len(lhs.List))
+	var entangledLhs *Var
+	var nonIdent ast.Expr
+	for i, lhs := range lhs.List {
+		isEntangled := entangledPos > 0 && i == entangledPos-1
+		if isEntangled && lhs == nil {
+			break
+		}
+		var obj *Var
+		if ident, _ := lhs.(*ast.Ident); ident != nil {
+			name := ident.Name
+			if alt := check.scope.Lookup(name); alt != nil {
+				if alt, _ := alt.(*Var); alt != nil {
+					obj = alt
+				} else {
+					check.errorf(lhs.Pos(), "cannot assign to %s", lhs)
+				}
+				check.recordUse(ident, alt)
+			}
+		} else {
+			nonIdent = lhs
+		}
+		if obj == nil {
+			obj = NewVar(lhs.Pos(), check.pkg, "_", nil) // dummy variable
+		}
+		if isEntangled {
+			entangledLhs = obj
+		} else {
+			lhsVars = append(lhsVars, obj)
+		}
+	}
+
+	if entangledLhs != nil {
+		if nonIdent != nil {
+			check.errorf(lhs.Pos(), "cannot entangle non-identifier %v", nonIdent)
+		} else {
+			check.checkVars(lhsVars, rhs, token.NoPos, entangledLhs, func(i int, _ *Var, x *operand, context string) Type {
+				return check.assignVar(lhs.List[i], x)
+			})
+
+			if entangledLhs != nil {
+				entangledLhs.collapses = lhsVars
+				for _, v := range lhsVars {
+					v.usable = false
+					if debugUsable {
+						fmt.Println("USABLE assignVars:", v.name, fmt.Sprintf("%p", v), v.usable)
+					}
+				}
+			}
+			return
+		}
+	}
+
+	l := lhs.Len()
+	get, r, commaOk := unpack(func(x *operand, i int) { check.rhsMultiExpr(x, rhs.List[i]) }, rhs.Len(), l == 2)
 	if get == nil {
 		return // error reported by unpack
 	}
 	if l != r {
 		check.useGetter(get, r)
-		check.errorf(rhs[0].Pos(), "assignment count mismatch (%d vs %d)", l, r)
+		check.errorf(rhs.Pos(), "assignment count mismatch (%d vs %d)", l, r)
 		return
 	}
 
@@ -337,13 +404,13 @@ func (check *Checker) assignVars(lhs, rhs []ast.Expr) {
 		var a [2]Type
 		for i := range a {
 			get(&x, i)
-			a[i] = check.assignVar(lhs[i], &x)
+			a[i] = check.assignVar(lhs.List[i], &x)
 		}
-		check.recordCommaOkTypes(rhs[0], a)
+		check.recordCommaOkTypes(rhs.List[0], a)
 		return
 	}
 
-	for i, lhs := range lhs {
+	for i, lhs := range lhs.List {
 		get(&x, i)
 		check.assignVar(lhs, &x)
 	}

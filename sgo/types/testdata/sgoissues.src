@@ -33,3 +33,39 @@ func issue16() {
 		}
 	}
 }
+
+func issue18() {
+	{
+		m := map[int]string{}
+		v \ ok := m[123]
+		v \ ok = m[123]
+		_, _ = v, ok /* ERROR possibly uninitialized variable: v */
+	}
+
+	{
+		m := map[int]string{}
+		var v string
+		var ok bool
+		v \ ok = m[123]
+		_, _ = v, ok /* ERROR possibly uninitialized variable: v */
+	}
+
+	{
+		m := map[int]string{}
+		var x struct{y string}
+		var ok bool
+		x.y \ ok = m[123] /* ERROR cannot entangle non-identifier */
+		_, _ = x, ok
+	}
+
+	// OK case
+	{
+		m := map[int]string{}
+		var v string
+		var ok bool
+		v \ ok = m[123]
+		if ok {
+			_ = v
+		}
+	}
+}

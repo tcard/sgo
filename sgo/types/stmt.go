@@ -425,7 +425,7 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 				check.shortVarDecl(s.TokPos, s.Lhs, s.Rhs)
 			} else {
 				// regular assignment
-				check.assignVars(s.Lhs.List, s.Rhs.List)
+				check.assignVars(s.Lhs, s.Rhs)
 			}
 
 		default:

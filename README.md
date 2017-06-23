@@ -7,12 +7,12 @@ SGo is a dialect of the Go programming language that **avoids nil-related panics
 It looks like this:
 
 ```go
-// var p *Something = nil <-- wrong! Doesn't compile.
+// var p *Something = nil // Wrong! Doesn't compile.
 var p *Something = &Something{} // OK!
 _ = *p // OK! And it won't ever crash, as p can't be nil.
 
 var op ?*Something = nil // OK!
-// _ = *op <-- wrong! Doesn't compile.
+// _ = *op // Wrong! Doesn't compile.
 if op != nil {
 	_ = *op // OK! You checked that op is not nil.
 }
@@ -23,12 +23,12 @@ func giveMeSomethingMaybe() (*Something \ error) { ... }
 
 s \ err := giveMeSomethingMaybe()
 
-// _ = *s <-- wrong! Doesn't compile.
+// _ = *s // Wrong! Doesn't compile.
 
 if err != nil {
 	return
 }
-_ = *s <-- OK! You checked that err is nil, and thus s is usable.
+_ = *s // OK! You checked that err is nil, and thus s is usable.
 ```
 
 [See it running, plus its Go translation, here!](http://fanyare.tcardenas.me:5600/?gist=4292080531744dbb9cc6ac6ff1a01627)
