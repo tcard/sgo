@@ -546,9 +546,11 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			sc = sc.Parent()
 		}
 
+		check.openScope(&ast.BadStmt{}, "ifBody")
 		collapsed := check.handleEffs(effs, false, check.scope)
-
 		check.stmt(inner, s.Body)
+		check.closeScope()
+
 		// The parser produces a correct AST but if it was modified
 		// elsewhere the else branch may be invalid. Check again.
 		switch s.Else.(type) {
@@ -579,9 +581,10 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		}
 
 		if s.Else != nil {
-			collapsed = check.handleEffs(effs, true, check.scope.Parent())
-
+			check.openScope(&ast.BadStmt{}, "elseBody")
+			collapsed = check.handleEffs(effs, true, check.scope)
 			check.stmt(inner, s.Else)
+			check.closeScope()
 
 			for v, wasUsable := range wereUsable {
 				if !(v.usable && usableAfterBody[v]) {

@@ -396,10 +396,10 @@ func TestScopesInfo(t *testing.T) {
 			"file:", "func:", "block:x",
 		}},
 		{`package p7; func _() { if true {} }`, []string{
-			"file:", "func:", "if:", "block:",
+			"file:", "func:", "if:", "bad:", "block:",
 		}},
 		{`package p8; func _() { if x := 0; x < 0 { y := x; _ = y } }`, []string{
-			"file:", "func:", "if:x", "block:y",
+			"file:", "func:", "if:x", "bad:", "block:y",
 		}},
 		{`package p9; func _() { switch x := 0; x {} }`, []string{
 			"file:", "func:", "switch:x",
@@ -472,6 +472,8 @@ func TestScopesInfo(t *testing.T) {
 				kind = "for"
 			case *ast.RangeStmt:
 				kind = "range"
+			case *ast.BadStmt:
+				kind = "bad"
 			}
 
 			// look for matching scope description

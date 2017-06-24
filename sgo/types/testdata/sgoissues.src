@@ -69,3 +69,53 @@ func issue18() {
 		}
 	}
 }
+
+func issue19() {
+	{
+		var err ?error
+		err.Error() /* ERROR invalid operation: Error is not in method set of \?error */
+		if err == nil {
+			err.Error()  /* ERROR invalid operation: Error is not in method set of \?error */
+		} else {
+			err.Error()
+		}
+		err.Error() /* ERROR invalid operation: Error is not in method set of \?error */
+	}
+
+	{
+		var err ?error
+		if x := 123; err != nil {
+			_ = x
+			y := 123
+			_ = y
+			err.Error()
+		} else {
+			_ = x
+			_ = y /* ERROR undeclared name */
+			err.Error() /* ERROR invalid operation: Error is not in method set of \?error */
+		}
+		err.Error() /* ERROR invalid operation: Error is not in method set of \?error */
+	}
+
+	{
+		var err ?error
+		if err == nil {
+			err.Error() /* ERROR invalid operation: Error is not in method set of \?error */
+			return
+		}
+		err.Error()
+	}
+
+	{
+		v \ err := func() (*int \ error) {
+			return new(int) \
+		}()
+		if err != nil {
+			err.Error()
+			_ = v /* ERROR possibly uninitialized variable: v */
+		} else {
+			err.Error() /* ERROR invalid operation: Error is not in method set of \?error */
+			_ = v
+		}
+	}
+}
