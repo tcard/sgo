@@ -2,208 +2,208 @@
 
 package main
 
-import (
-	"bytes"
-	"encoding/json"
-	"errors"
-	"flag"
-	"fmt"
-	"html/template"
-	"io"
-	"log"
-	"net/http"
-	"net/url"
-	"runtime"
-	"strings"
+/* sgoplayground/main.sgo:3 */ import (
+/* sgoplayground/main.sgo:4 */ 	"bytes"
+/* sgoplayground/main.sgo:5 */ 	"encoding/json"
+/* sgoplayground/main.sgo:6 */ 	"errors"
+/* sgoplayground/main.sgo:7 */ 	"flag"
+/* sgoplayground/main.sgo:8 */ 	"fmt"
+/* sgoplayground/main.sgo:9 */ 	"html/template"
+/* sgoplayground/main.sgo:10 */ 	"io"
+/* sgoplayground/main.sgo:11 */ 	"log"
+/* sgoplayground/main.sgo:12 */ 	"net/http"
+/* sgoplayground/main.sgo:13 */ 	"net/url"
+/* sgoplayground/main.sgo:14 */ 	"runtime"
+/* sgoplayground/main.sgo:15 */ 	"strings"
 
-	"github.com/gorilla/websocket"
-	"github.com/tcard/sgo/sgo"
-	"github.com/tcard/sgo/sgo/format"
-	"github.com/tcard/sgo/sgo/scanner"
-)
+/* sgoplayground/main.sgo:17 */ 	"github.com/gorilla/websocket"
+/* sgoplayground/main.sgo:18 */ 	"github.com/tcard/sgo/sgo"
+/* sgoplayground/main.sgo:19 */ 	"github.com/tcard/sgo/sgo/format"
+/* sgoplayground/main.sgo:20 */ 	"github.com/tcard/sgo/sgo/scanner"
+/* sgoplayground/main.sgo:21 */ )
 
-var (
-	httpAddr = flag.String("http", ":5600", "HTTP server address")
+/* sgoplayground/main.sgo:23 */ var (
+/* sgoplayground/main.sgo:24 */ 	httpAddr = flag.String("http", ":5600", "HTTP server address")
 
-	upgrader = websocket.Upgrader{}
-)
+/* sgoplayground/main.sgo:26 */ 	upgrader = websocket.Upgrader{}
+/* sgoplayground/main.sgo:27 */ )
 
-const defaultHost = "fanyare.tcardenas.me:5600"
+/* sgoplayground/main.sgo:29 */ const defaultHost = "fanyare.tcardenas.me:5600"
 
-func handleMsg(msg msgType) {
-	c := msg.c
-	if c == nil {
-		log.Println("c shouldn't be nil")
-		return
-	}
-	switch msg.Type {
-	case "format":
-		resp := &msgType{
-			Type: "format",
-		}
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					value := fmt.Sprintln(r)
-					stack := make([]byte, 99999)
-					runtime.Stack(stack, false)
-					value += string(stack)
-					resp.Value = value
-				}
-			}()
-			formatted, err := format.Source([]byte(msg.Value.(string)))
-			if err == nil {
-				resp.Value = string(formatted)
-			}
-		}()
-		c.WriteJSON(resp)
-	case "translate":
-		resp := &msgType{
-			Type: "translate",
-		}
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					value := fmt.Sprintln(r)
-					stack := make([]byte, 99999)
-					runtime.Stack(stack, false)
-					value += string(stack)
-					resp.Value = value
-				}
-			}()
-			w := &bytes.Buffer{}
-			errs := sgo.TranslateFile(func() (io.Writer, error) { return w, nil }, strings.NewReader(msg.Value.(string)), "name")
-			if errs != nil {
-				var errMsgs []string
-				for _, err := range errs {
-					if errs, ok := err.(scanner.ErrorList); ok {
-						for _, err := range errs {
-							errMsgs = append(errMsgs, err.Error())
-						}
-					} else {
-						errMsgs = append(errMsgs, err.Error())
-					}
-				}
-				resp.Value = strings.Join(errMsgs, "\n")
-			} else {
-				resp.Value = w.String()
-			}
-		}()
-		c.WriteJSON(resp)
-	case "execute":
-		resp := &msgType{
-			Type: "execute",
-		}
-		body := url.Values{}
-		body.Add("version", "2")
-		var errs []error
-		w := &bytes.Buffer{}
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					value := fmt.Sprintln(r)
-					stack := make([]byte, 99999)
-					runtime.Stack(stack, false)
-					value += string(stack)
-					errs = append(errs, errors.New(value))
-				}
-			}()
+/* sgoplayground/main.sgo:31 */ func handleMsg(msg msgType) {
+/* sgoplayground/main.sgo:32 */ 	c := msg.c
+/* sgoplayground/main.sgo:33 */ 	if c == nil {
+/* sgoplayground/main.sgo:34 */ 		log.Println("c shouldn't be nil")
+/* sgoplayground/main.sgo:35 */ 		return
+/* sgoplayground/main.sgo:36 */ 	}
+/* sgoplayground/main.sgo:37 */ 	switch msg.Type {
+/* sgoplayground/main.sgo:38 */ 	case "format":
+/* sgoplayground/main.sgo:39 */ 		resp := &msgType{
+/* sgoplayground/main.sgo:40 */ 			Type: "format",
+/* sgoplayground/main.sgo:41 */ 		}
+/* sgoplayground/main.sgo:42 */ 		func() {
+/* sgoplayground/main.sgo:43 */ 			defer func() {
+/* sgoplayground/main.sgo:44 */ 				if r := recover(); r != nil {
+/* sgoplayground/main.sgo:45 */ 					value := fmt.Sprintln(r)
+/* sgoplayground/main.sgo:46 */ 					stack := make([]byte, 99999)
+/* sgoplayground/main.sgo:47 */ 					runtime.Stack(stack, false)
+/* sgoplayground/main.sgo:48 */ 					value += string(stack)
+/* sgoplayground/main.sgo:49 */ 					resp.Value = value
+/* sgoplayground/main.sgo:50 */ 				}
+/* sgoplayground/main.sgo:51 */ 			}()
+/* sgoplayground/main.sgo:52 */ 			formatted, err := format.Source([]byte(msg.Value.(string)))
+/* sgoplayground/main.sgo:53 */ 			if err == nil {
+/* sgoplayground/main.sgo:54 */ 				resp.Value = string(formatted)
+/* sgoplayground/main.sgo:55 */ 			}
+/* sgoplayground/main.sgo:56 */ 		}()
+/* sgoplayground/main.sgo:57 */ 		c.WriteJSON(resp)
+/* sgoplayground/main.sgo:58 */ 	case "translate":
+/* sgoplayground/main.sgo:59 */ 		resp := &msgType{
+/* sgoplayground/main.sgo:60 */ 			Type: "translate",
+/* sgoplayground/main.sgo:61 */ 		}
+/* sgoplayground/main.sgo:62 */ 		func() {
+/* sgoplayground/main.sgo:63 */ 			defer func() {
+/* sgoplayground/main.sgo:64 */ 				if r := recover(); r != nil {
+/* sgoplayground/main.sgo:65 */ 					value := fmt.Sprintln(r)
+/* sgoplayground/main.sgo:66 */ 					stack := make([]byte, 99999)
+/* sgoplayground/main.sgo:67 */ 					runtime.Stack(stack, false)
+/* sgoplayground/main.sgo:68 */ 					value += string(stack)
+/* sgoplayground/main.sgo:69 */ 					resp.Value = value
+/* sgoplayground/main.sgo:70 */ 				}
+/* sgoplayground/main.sgo:71 */ 			}()
+/* sgoplayground/main.sgo:72 */ 			w := &bytes.Buffer{}
+/* sgoplayground/main.sgo:73 */ 			errs := sgo.TranslateFile(func() (io.Writer, error) { return w, nil }, strings.NewReader(msg.Value.(string)), "name")
+/* sgoplayground/main.sgo:74 */ 			if errs != nil {
+/* sgoplayground/main.sgo:75 */ 				var errMsgs []string
+/* sgoplayground/main.sgo:76 */ 				for _, err := range errs {
+/* sgoplayground/main.sgo:77 */ 					if errs, ok := err.(scanner.ErrorList); ok {
+/* sgoplayground/main.sgo:78 */ 						for _, err := range errs {
+/* sgoplayground/main.sgo:79 */ 							errMsgs = append(errMsgs, err.Error())
+/* sgoplayground/main.sgo:80 */ 						}
+/* sgoplayground/main.sgo:81 */ 					} else {
+/* sgoplayground/main.sgo:82 */ 						errMsgs = append(errMsgs, err.Error())
+/* sgoplayground/main.sgo:83 */ 					}
+/* sgoplayground/main.sgo:84 */ 				}
+/* sgoplayground/main.sgo:85 */ 				resp.Value = strings.Join(errMsgs, "\n")
+/* sgoplayground/main.sgo:86 */ 			} else {
+/* sgoplayground/main.sgo:87 */ 				resp.Value = w.String()
+/* sgoplayground/main.sgo:88 */ 			}
+/* sgoplayground/main.sgo:89 */ 		}()
+/* sgoplayground/main.sgo:90 */ 		c.WriteJSON(resp)
+/* sgoplayground/main.sgo:91 */ 	case "execute":
+/* sgoplayground/main.sgo:92 */ 		resp := &msgType{
+/* sgoplayground/main.sgo:93 */ 			Type: "execute",
+/* sgoplayground/main.sgo:94 */ 		}
+/* sgoplayground/main.sgo:95 */ 		body := url.Values{}
+/* sgoplayground/main.sgo:96 */ 		body.Add("version", "2")
+/* sgoplayground/main.sgo:97 */ 		var errs []error
+/* sgoplayground/main.sgo:98 */ 		w := &bytes.Buffer{}
+/* sgoplayground/main.sgo:99 */ 		func() {
+/* sgoplayground/main.sgo:100 */ 			defer func() {
+/* sgoplayground/main.sgo:101 */ 				if r := recover(); r != nil {
+/* sgoplayground/main.sgo:102 */ 					value := fmt.Sprintln(r)
+/* sgoplayground/main.sgo:103 */ 					stack := make([]byte, 99999)
+/* sgoplayground/main.sgo:104 */ 					runtime.Stack(stack, false)
+/* sgoplayground/main.sgo:105 */ 					value += string(stack)
+/* sgoplayground/main.sgo:106 */ 					errs = append(errs, errors.New(value))
+/* sgoplayground/main.sgo:107 */ 				}
+/* sgoplayground/main.sgo:108 */ 			}()
 
-			errs = sgo.TranslateFile(func() (io.Writer, error) { return w, nil }, strings.NewReader(msg.Value.(string)), "name")
-		}()
-		if errs != nil {
-			var errMsgs []string
-			for _, err := range errs {
-				if errs, ok := err.(scanner.ErrorList); ok {
-					for _, err := range errs {
-						errMsgs = append(errMsgs, err.Error())
-					}
-				} else {
-					errMsgs = append(errMsgs, err.Error())
-				}
-			}
-			resp.Value = strings.Join(errMsgs, "\n")
-		} else {
-			body.Add("body", w.String())
-			postResp, err := http.PostForm("https://play.golang.org/compile", body)
-			if err != nil {
-				resp.Value = err.Error()
-			} else {
-				var v interface{}
-				err := json.NewDecoder(postResp.Body).Decode(&v)
-				postResp.Body.Close()
-				if err != nil {
-					resp.Value = err.Error()
-				} else {
-					resp.Value = v
-				}
-			}
-		}
-		c.WriteJSON(resp)
-	}
-}
+/* sgoplayground/main.sgo:110 */ 			errs = sgo.TranslateFile(func() (io.Writer, error) { return w, nil }, strings.NewReader(msg.Value.(string)), "name")
+/* sgoplayground/main.sgo:111 */ 		}()
+/* sgoplayground/main.sgo:112 */ 		if errs != nil {
+/* sgoplayground/main.sgo:113 */ 			var errMsgs []string
+/* sgoplayground/main.sgo:114 */ 			for _, err := range errs {
+/* sgoplayground/main.sgo:115 */ 				if errs, ok := err.(scanner.ErrorList); ok {
+/* sgoplayground/main.sgo:116 */ 					for _, err := range errs {
+/* sgoplayground/main.sgo:117 */ 						errMsgs = append(errMsgs, err.Error())
+/* sgoplayground/main.sgo:118 */ 					}
+/* sgoplayground/main.sgo:119 */ 				} else {
+/* sgoplayground/main.sgo:120 */ 					errMsgs = append(errMsgs, err.Error())
+/* sgoplayground/main.sgo:121 */ 				}
+/* sgoplayground/main.sgo:122 */ 			}
+/* sgoplayground/main.sgo:123 */ 			resp.Value = strings.Join(errMsgs, "\n")
+/* sgoplayground/main.sgo:124 */ 		} else {
+/* sgoplayground/main.sgo:125 */ 			body.Add("body", w.String())
+/* sgoplayground/main.sgo:126 */ 			postResp, err := http.PostForm("https://play.golang.org/compile", body)
+/* sgoplayground/main.sgo:127 */ 			if err != nil {
+/* sgoplayground/main.sgo:128 */ 				resp.Value = err.Error()
+/* sgoplayground/main.sgo:129 */ 			} else {
+/* sgoplayground/main.sgo:130 */ 				var v interface{}
+/* sgoplayground/main.sgo:131 */ 				err := json.NewDecoder(postResp.Body).Decode(&v)
+/* sgoplayground/main.sgo:132 */ 				postResp.Body.Close()
+/* sgoplayground/main.sgo:133 */ 				if err != nil {
+/* sgoplayground/main.sgo:134 */ 					resp.Value = err.Error()
+/* sgoplayground/main.sgo:135 */ 				} else {
+/* sgoplayground/main.sgo:136 */ 					resp.Value = v
+/* sgoplayground/main.sgo:137 */ 				}
+/* sgoplayground/main.sgo:138 */ 			}
+/* sgoplayground/main.sgo:139 */ 		}
+/* sgoplayground/main.sgo:140 */ 		c.WriteJSON(resp)
+/* sgoplayground/main.sgo:141 */ 	}
+/* sgoplayground/main.sgo:142 */ }
 
-func main() {
-	flag.Parse()
+/* sgoplayground/main.sgo:144 */ func main() {
+/* sgoplayground/main.sgo:145 */ 	flag.Parse()
 
-	http.HandleFunc("/ws", func(w http.ResponseWriter, req *http.Request) {
-		c, err := upgrader.Upgrade(w, req, nil)
-		if err != nil {
-			log.Println("upgrade:", err)
-			return
-		}
-		defer c.Close()
-		for {
-			var recvMsg msgType
-			err := c.ReadJSON(&recvMsg)
-			if err != nil {
-				log.Println("read:", err)
-				break
-			}
-			recvMsg.c = c
-			handleMsg(recvMsg)
-		}
-	})
+/* sgoplayground/main.sgo:147 */ 	http.HandleFunc("/ws", func(w http.ResponseWriter, req *http.Request) {
+/* sgoplayground/main.sgo:148 */ 		c, err := upgrader.Upgrade(w, req, nil)
+/* sgoplayground/main.sgo:149 */ 		if err != nil {
+/* sgoplayground/main.sgo:150 */ 			log.Println("upgrade:", err)
+/* sgoplayground/main.sgo:151 */ 			return
+/* sgoplayground/main.sgo:152 */ 		}
+/* sgoplayground/main.sgo:153 */ 		defer c.Close()
+/* sgoplayground/main.sgo:154 */ 		for {
+/* sgoplayground/main.sgo:155 */ 			var recvMsg msgType
+/* sgoplayground/main.sgo:156 */ 			err := c.ReadJSON(&recvMsg)
+/* sgoplayground/main.sgo:157 */ 			if err != nil {
+/* sgoplayground/main.sgo:158 */ 				log.Println("read:", err)
+/* sgoplayground/main.sgo:159 */ 				break
+/* sgoplayground/main.sgo:160 */ 			}
+/* sgoplayground/main.sgo:161 */ 			recvMsg.c = c
+/* sgoplayground/main.sgo:162 */ 			handleMsg(recvMsg)
+/* sgoplayground/main.sgo:163 */ 		}
+/* sgoplayground/main.sgo:164 */ 	})
 
-	buf := &bytes.Buffer{}
-	indexTpl.Execute(buf, map[string]interface{}{
-		"Gist":          "",
-		"WSURL":         "ws://" + defaultHost + "/ws",
-		"PreloadedCode": defaultPreloadedCode,
-	})
-	preexecutedTpl := buf.Bytes()
+/* sgoplayground/main.sgo:166 */ 	buf := &bytes.Buffer{}
+/* sgoplayground/main.sgo:167 */ 	indexTpl.Execute(buf, map[string]interface{}{
+/* sgoplayground/main.sgo:168 */ 		"Gist":          "",
+/* sgoplayground/main.sgo:169 */ 		"WSURL":         "ws://" + defaultHost + "/ws",
+/* sgoplayground/main.sgo:170 */ 		"PreloadedCode": defaultPreloadedCode,
+/* sgoplayground/main.sgo:171 */ 	})
+/* sgoplayground/main.sgo:172 */ 	preexecutedTpl := buf.Bytes()
 
-	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		gist := req.URL.Query().Get("gist")
-		if gist == "" && req.Host == defaultHost {
-			w.Write(preexecutedTpl)
-			return
-		}
+/* sgoplayground/main.sgo:174 */ 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+/* sgoplayground/main.sgo:175 */ 		gist := req.URL.Query().Get("gist")
+/* sgoplayground/main.sgo:176 */ 		if gist == "" && req.Host == defaultHost {
+/* sgoplayground/main.sgo:177 */ 			w.Write(preexecutedTpl)
+/* sgoplayground/main.sgo:178 */ 			return
+/* sgoplayground/main.sgo:179 */ 		}
 
-		preloadedCode := ""
-		if gist == "" {
-			preloadedCode = defaultPreloadedCode
-		}
-		indexTpl.Execute(w, map[string]interface{}{
-			"Gist":          gist,
-			"WSURL":         "ws://" + req.Host + "/ws",
-			"PreloadedCode": preloadedCode,
-		})
-	})
+/* sgoplayground/main.sgo:181 */ 		preloadedCode := ""
+/* sgoplayground/main.sgo:182 */ 		if gist == "" {
+/* sgoplayground/main.sgo:183 */ 			preloadedCode = defaultPreloadedCode
+/* sgoplayground/main.sgo:184 */ 		}
+/* sgoplayground/main.sgo:185 */ 		indexTpl.Execute(w, map[string]interface{}{
+/* sgoplayground/main.sgo:186 */ 			"Gist":          gist,
+/* sgoplayground/main.sgo:187 */ 			"WSURL":         "ws://" + req.Host + "/ws",
+/* sgoplayground/main.sgo:188 */ 			"PreloadedCode": preloadedCode,
+/* sgoplayground/main.sgo:189 */ 		})
+/* sgoplayground/main.sgo:190 */ 	})
 
-	fmt.Println("Serving on", *httpAddr)
-	log.Fatal(http.ListenAndServe(*httpAddr, nil))
-}
+/* sgoplayground/main.sgo:192 */ 	fmt.Println("Serving on", *httpAddr)
+/* sgoplayground/main.sgo:193 */ 	log.Fatal(http.ListenAndServe(*httpAddr, nil))
+/* sgoplayground/main.sgo:194 */ }
 
-type msgType struct {
+/* sgoplayground/main.sgo:196 */ type msgType struct {
 	// For SGo: string
 	Type  string       `json:"type"`
 	// For SGo: ?interface{}
 	Value interface{} `json:"value"`
-	c     *websocket.Conn
-}
+/* sgoplayground/main.sgo:199 */ 	c     *websocket.Conn
+/* sgoplayground/main.sgo:200 */ }
 
-const defaultPreloadedCode = `package main
+/* sgoplayground/main.sgo:202 */ const defaultPreloadedCode = `package main
 
 import (
 	"fmt"
@@ -243,7 +243,7 @@ func giveMeSomethingMaybe() (*Something \ error) {
 }
 `
 
-var indexTpl = template.Must(template.New("index").Parse(`
+/* sgoplayground/main.sgo:242 */ var indexTpl = template.Must(template.New("index").Parse(`
 <!DOCTYPE html>
 <html lang="en">
 

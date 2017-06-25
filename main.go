@@ -2,107 +2,107 @@
 
 package main
 
-import (
-	"fmt"
-	"io"
-	"os"
-	"os/exec"
+/* main.sgo:3 */ import (
+/* main.sgo:4 */ 	"fmt"
+/* main.sgo:5 */ 	"io"
+/* main.sgo:6 */ 	"os"
+/* main.sgo:7 */ 	"os/exec"
 
-	"github.com/tcard/sgo/sgo"
-	"github.com/tcard/sgo/sgo/scanner"
-)
+/* main.sgo:9 */ 	"github.com/tcard/sgo/sgo"
+/* main.sgo:10 */ 	"github.com/tcard/sgo/sgo/scanner"
+/* main.sgo:11 */ )
 
-func main() {
-	if len(os.Args) == 1 {
-		fmt.Print(helpMsg)
-		return
-	}
+/* main.sgo:13 */ func main() {
+/* main.sgo:14 */ 	if len(os.Args) == 1 {
+/* main.sgo:15 */ 		fmt.Print(helpMsg)
+/* main.sgo:16 */ 		return
+/* main.sgo:17 */ 	}
 
-	var buildFlags []string
-	var extraArgs []string
-	for i, arg := range os.Args[2:] {
-		if arg[0] == '-' {
-			buildFlags = append(buildFlags, arg)
-		} else {
-			extraArgs = os.Args[i+2:]
-			break
-		}
-	}
+/* main.sgo:19 */ 	var buildFlags []string
+/* main.sgo:20 */ 	var extraArgs []string
+/* main.sgo:21 */ 	for i, arg := range os.Args[2:] {
+/* main.sgo:22 */ 		if arg[0] == '-' {
+/* main.sgo:23 */ 			buildFlags = append(buildFlags, arg)
+/* main.sgo:24 */ 		} else {
+/* main.sgo:25 */ 			extraArgs = os.Args[i+2:]
+/* main.sgo:26 */ 			break
+/* main.sgo:27 */ 		}
+/* main.sgo:28 */ 	}
 
-	switch os.Args[1] {
-	case "version":
-		fmt.Println("sgo version 0.7 (compatible with go1.7)")
-		return
-	case "run":
-		if len(extraArgs) == 0 {
-			fmt.Fprintln(os.Stderr, "sgo run: no files listed")
-			os.Exit(1)
-		}
-		created, errs := sgo.TranslateFilePaths(extraArgs...)
-		reportErrs(errs...)
-		if len(errs) > 0 {
-			os.Exit(1)
-		}
-		runGoCommand("run", buildFlags, created...)
-		return
-	case "help":
-		if len(extraArgs) == 0 {
-			fmt.Print(helpMsg)
-		} else {
-			switch extraArgs[0] {
-			case "translate":
-				fmt.Print(translateHelpMsg)
-				return
-			case "version":
-				fmt.Print(versionHelpMsg)
-				return
-			}
-			runGoCommand("help", buildFlags, extraArgs...)
-		}
-		return
-	case "translate":
-		errs := sgo.TranslateFile(func() (io.Writer, error) { return os.Stdout, nil }, os.Stdin, "stdin.sgo")
-		if len(errs) > 0 {
-			reportErrs(errs...)
-			os.Exit(1)
-		}
-		return
-	}
+/* main.sgo:30 */ 	switch os.Args[1] {
+/* main.sgo:31 */ 	case "version":
+/* main.sgo:32 */ 		fmt.Println("sgo version 0.7 (compatible with go1.7)")
+/* main.sgo:33 */ 		return
+/* main.sgo:34 */ 	case "run":
+/* main.sgo:35 */ 		if len(extraArgs) == 0 {
+/* main.sgo:36 */ 			fmt.Fprintln(os.Stderr, "sgo run: no files listed")
+/* main.sgo:37 */ 			os.Exit(1)
+/* main.sgo:38 */ 		}
+/* main.sgo:39 */ 		created, errs := sgo.TranslateFilePaths(extraArgs...)
+/* main.sgo:40 */ 		reportErrs(errs...)
+/* main.sgo:41 */ 		if len(errs) > 0 {
+/* main.sgo:42 */ 			os.Exit(1)
+/* main.sgo:43 */ 		}
+/* main.sgo:44 */ 		runGoCommand("run", buildFlags, created...)
+/* main.sgo:45 */ 		return
+/* main.sgo:46 */ 	case "help":
+/* main.sgo:47 */ 		if len(extraArgs) == 0 {
+/* main.sgo:48 */ 			fmt.Print(helpMsg)
+/* main.sgo:49 */ 		} else {
+/* main.sgo:50 */ 			switch extraArgs[0] {
+/* main.sgo:51 */ 			case "translate":
+/* main.sgo:52 */ 				fmt.Print(translateHelpMsg)
+/* main.sgo:53 */ 				return
+/* main.sgo:54 */ 			case "version":
+/* main.sgo:55 */ 				fmt.Print(versionHelpMsg)
+/* main.sgo:56 */ 				return
+/* main.sgo:57 */ 			}
+/* main.sgo:58 */ 			runGoCommand("help", buildFlags, extraArgs...)
+/* main.sgo:59 */ 		}
+/* main.sgo:60 */ 		return
+/* main.sgo:61 */ 	case "translate":
+/* main.sgo:62 */ 		errs := sgo.TranslateFile(func() (io.Writer, error) { return os.Stdout, nil }, os.Stdin, "stdin.sgo")
+/* main.sgo:63 */ 		if len(errs) > 0 {
+/* main.sgo:64 */ 			reportErrs(errs...)
+/* main.sgo:65 */ 			os.Exit(1)
+/* main.sgo:66 */ 		}
+/* main.sgo:67 */ 		return
+/* main.sgo:68 */ 	}
 
-	if len(extraArgs) == 0 {
-		extraArgs = append(extraArgs, ".")
-	}
-	_, warnings, errs := sgo.TranslatePaths(extraArgs)
-	reportErrs(warnings...)
-	reportErrs(errs...)
-	if len(errs) > 0 {
-		os.Exit(1)
-	}
+/* main.sgo:70 */ 	if len(extraArgs) == 0 {
+/* main.sgo:71 */ 		extraArgs = append(extraArgs, ".")
+/* main.sgo:72 */ 	}
+/* main.sgo:73 */ 	_, warnings, errs := sgo.TranslatePaths(extraArgs)
+/* main.sgo:74 */ 	reportErrs(warnings...)
+/* main.sgo:75 */ 	reportErrs(errs...)
+/* main.sgo:76 */ 	if len(errs) > 0 {
+/* main.sgo:77 */ 		os.Exit(1)
+/* main.sgo:78 */ 	}
 
-	runGoCommand(os.Args[1], buildFlags, extraArgs...)
-}
+/* main.sgo:80 */ 	runGoCommand(os.Args[1], buildFlags, extraArgs...)
+/* main.sgo:81 */ }
 
-func reportErrs(errs ...error) {
-	for _, err := range errs {
-		if errs, ok := err.(scanner.ErrorList); ok {
-			for _, err := range errs {
-				fmt.Fprintln(os.Stderr, err)
-			}
-		} else {
-			fmt.Fprintln(os.Stderr, err)
-		}
-	}
-}
+/* main.sgo:83 */ func reportErrs(errs ...error) {
+/* main.sgo:84 */ 	for _, err := range errs {
+/* main.sgo:85 */ 		if errs, ok := err.(scanner.ErrorList); ok {
+/* main.sgo:86 */ 			for _, err := range errs {
+/* main.sgo:87 */ 				fmt.Fprintln(os.Stderr, err)
+/* main.sgo:88 */ 			}
+/* main.sgo:89 */ 		} else {
+/* main.sgo:90 */ 			fmt.Fprintln(os.Stderr, err)
+/* main.sgo:91 */ 		}
+/* main.sgo:92 */ 	}
+/* main.sgo:93 */ }
 
-func runGoCommand(cmd string, buildFlags []string, extraArgs ...string) {
-	c := exec.Command("go", append(append([]string{cmd}, buildFlags...), extraArgs...)...)
-	c.Stdin = os.Stdin
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	c.Run()
-}
+/* main.sgo:95 */ func runGoCommand(cmd string, buildFlags []string, extraArgs ...string) {
+/* main.sgo:96 */ 	c := exec.Command("go", append(append([]string{cmd}, buildFlags...), extraArgs...)...)
+/* main.sgo:97 */ 	c.Stdin = os.Stdin
+/* main.sgo:98 */ 	c.Stdout = os.Stdout
+/* main.sgo:99 */ 	c.Stderr = os.Stderr
+/* main.sgo:100 */ 	c.Run()
+/* main.sgo:101 */ }
 
-const helpMsg = `sgo is a tool for managing SGo source code.
+/* main.sgo:103 */ const helpMsg = `sgo is a tool for managing SGo source code.
 
 Usage:
 
@@ -125,7 +125,7 @@ Use "sgo help [command]" for more information about a command.
 Use "go help" to see a complete list of help topics.
 `
 
-const translateHelpMsg = `usage: sgo translate
+/* main.sgo:126 */ const translateHelpMsg = `usage: sgo translate
 
 Translate reads SGo code from the standard input, and prints the resulting Go
 code to the standard output.
@@ -134,7 +134,7 @@ If there are errors in the provided SGo code, they will be reported to the
 standard error and the command will exit with a non-zero exit code.
 `
 
-const versionHelpMsg = `usage: sgo version
+/* main.sgo:135 */ const versionHelpMsg = `usage: sgo version
 
 Version prints the SGo version. It also reports the Go version it is compatible
 with. "Compatible" means that SGo compiles to this Go version, and is able to
