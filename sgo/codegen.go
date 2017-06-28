@@ -502,6 +502,14 @@ func (c *converter) convertValueSpec(v *ast.ValueSpec) {
 		c.convertIdent(name)
 	}
 	c.convertExpr(v.Type)
+
+	if v.Values.Len() == 1 {
+		if e, ok := v.Values.List[0].(*ast.TypeAssertExpr); ok {
+			c.convertTypeAssertExpr(e, v.Values.Len() == 2)
+			return
+		}
+	}
+
 	c.convertExprList(v.Values)
 }
 
@@ -808,6 +816,14 @@ func (c *converter) convertAssignStmt(v *ast.AssignStmt) {
 	}
 	c.annotationFromDocs(v)
 	c.convertExprList(v.Lhs)
+
+	if v.Rhs.Len() == 1 {
+		if e, ok := v.Rhs.List[0].(*ast.TypeAssertExpr); ok {
+			c.convertTypeAssertExpr(e, v.Lhs.Len() == 2)
+			return
+		}
+	}
+
 	c.convertExprList(v.Rhs)
 }
 
@@ -836,9 +852,129 @@ func (c *converter) convertTypeSwitchStmt(v *ast.TypeSwitchStmt) {
 	}
 	c.annotationFromDocs(v)
 
-	c.convertStmt(v.Init)
-	c.convertStmt(v.Assign)
-	c.convertBlockStmt(v.Body)
+	var clauses []*ast.CaseClause
+	optClauses := map[ast.Expr][]types.OptionablePath{}
+
+	for _, clause := range v.Body.List {
+		clause := clause.(*ast.CaseClause)
+		clauses = append(clauses, clause)
+		for _, n := range clause.List.List {
+			typ, ok := c.Types[n]
+			if !ok {
+				continue
+			}
+			checks, _ := types.FindOptionables(typ.Type)
+			if len(checks) > 0 {
+				optClauses[n] = checks
+			}
+		}
+	}
+
+	if len(optClauses) == 0 {
+		c.convertStmt(v.Init)
+		c.convertStmt(v.Assign)
+		c.convertBlockStmt(v.Body)
+		return
+	}
+
+	c.putChunks(int(v.Pos())-1, c.src[c.lastChunkEnd:int(v.Pos())-c.base-1], []byte("switch { case true: "))
+	if v.Init != nil {
+		c.moveSrc(v.Init.Pos() - 1)
+		c.justPrint(v.Init.End(), func() {
+			c.convertStmt(v.Init)
+		})
+		c.dstChunks = append(c.dstChunks, []byte("; "))
+	}
+
+	assignVar := "_"
+	var assertExpr *ast.TypeAssertExpr
+
+	switch v := v.Assign.(type) {
+	case *ast.ExprStmt:
+		assertExpr = v.X.(*ast.TypeAssertExpr)
+	case *ast.AssignStmt:
+		assignVar = v.Lhs.List[0].(*ast.Ident).Name
+		assertExpr = v.Rhs.List[0].(*ast.TypeAssertExpr)
+	}
+
+	// Must put switched expression in variable, lest we evaluate its possible
+	// side effects more than once.
+	c.dstChunks = append(c.dstChunks, []byte("__sgo_switched := "))
+	c.moveSrc(assertExpr.X.Pos() - 1)
+	c.justPrint(assertExpr.X.End(), func() {
+		c.convertExpr(assertExpr.X)
+	})
+
+	c.dstChunks = append(c.dstChunks, []byte(";\n"))
+
+	var bs []byte
+	for i, clause := range clauses {
+		if i > 0 {
+			bs = append(bs, []byte(" else ")...)
+		}
+		bs = append(bs, []byte("if "+assignVar)...)
+		if clause.List.Len() == 0 || clause.List.Len() > 1 {
+			// Switch variable is not type-asserted.
+			if assignVar == "_" {
+				bs = append(bs, []byte(" =")...)
+			} else {
+				bs = append(bs, []byte(" :=")...)
+			}
+			bs = append(bs, []byte(" __sgo_switched; ")...)
+			if clause.List.Len() == 0 {
+				bs = append(bs, []byte("true")...)
+			} else {
+				for i, n := range clause.List.List {
+					if i > 0 {
+						bs = append(bs, []byte(" || ")...)
+					}
+					bs = append(bs, []byte("func() bool { _, ok := ")...)
+					c.dstChunks = append(c.dstChunks, bs)
+					bs = nil
+					c.moveSrc(v.Pos() - 1)
+					checks := optClauses[n]
+					c.typeAssertOptionables(v.Pos(), v.End(), true, checks, func() {
+						c.moveSrc(n.Pos() - 1)
+						c.justPrint(n.End(), func() {
+							c.convertExpr(n)
+						})
+					}, func() {
+						c.dstChunks = append(c.dstChunks, []byte("__sgo_switched"))
+					})
+					bs = append(bs, []byte("; return ok }()")...)
+				}
+			}
+		} else {
+			bs = append(bs, []byte(", ok := ")...)
+			c.dstChunks = append(c.dstChunks, bs)
+			bs = nil
+			c.moveSrc(v.Pos() - 1)
+			clause := clause.List.List[0]
+			checks := optClauses[clause]
+			c.typeAssertOptionables(v.Pos(), v.End(), true, checks, func() {
+				c.moveSrc(clause.Pos() - 1)
+				c.justPrint(clause.End(), func() {
+					c.convertExpr(clause)
+				})
+			}, func() {
+				c.dstChunks = append(c.dstChunks, []byte("__sgo_switched"))
+			})
+			bs = append(bs, []byte("; ok ")...)
+		}
+		bs = append(bs, []byte("{\n")...)
+		c.dstChunks = append(c.dstChunks, bs)
+		bs = nil
+		c.moveSrc(clause.Colon)
+		c.newLines = c.fset.Position(clause.Colon).Line - 1
+		for _, v := range clause.Body {
+			c.convertStmt(v)
+		}
+		c.putChunks(int(clause.End()-1), c.src[c.lastChunkEnd:int(clause.End())-c.base-1], nil)
+		bs = append(bs, []byte("\n}")...)
+	}
+	c.dstChunks = append(c.dstChunks, bs, []byte("\n}"))
+
+	c.moveSrc(v.End())
 }
 
 func (c *converter) convertCaseClause(v *ast.CaseClause) {
@@ -917,7 +1053,7 @@ func (c *converter) convertExpr(v ast.Expr) {
 		c.convertParenExpr(v)
 		return
 	case *ast.TypeAssertExpr:
-		c.convertTypeAssertExpr(v)
+		c.convertTypeAssertExpr(v, false)
 		return
 	case *ast.MapType:
 		c.convertMapType(v)
@@ -1033,14 +1169,99 @@ func (c *converter) convertParenExpr(v *ast.ParenExpr) {
 	c.convertExpr(v.X)
 }
 
-func (c *converter) convertTypeAssertExpr(v *ast.TypeAssertExpr) {
+func (c *converter) convertTypeAssertExpr(v *ast.TypeAssertExpr, commaOk bool) {
 	if v == nil {
 		return
 	}
 	c.annotationFromDocs(v)
 
-	c.convertExpr(v.X)
-	c.convertExpr(v.Type)
+	checks, _ := types.FindOptionables(c.Types[v.Type].Type)
+	if len(checks) == 0 {
+		c.convertExpr(v.X)
+		c.convertExpr(v.Type)
+		return
+	}
+
+	c.typeAssertOptionables(v.Pos(), v.End(), commaOk, checks, func() {
+		c.newLines = c.fset.Position(v.Type.Pos()).Line - 1
+		c.moveSrc(v.Type.Pos() - 1)
+		c.justPrint(v.Type.End(), func() {
+			c.convertExpr(v.Type)
+		})
+	}, func() {
+		c.newLines = c.fset.Position(v.X.Pos()).Line - 1
+		c.moveSrc(v.X.Pos() - 1)
+		c.justPrint(v.X.End(), func() {
+			c.convertExpr(v.X)
+		})
+	})
+}
+
+func (c *converter) typeAssertOptionables(pos, end token.Pos, commaOk bool, checks []types.OptionablePath, printType, printX func()) {
+	// TODO: Optimize len(checks) == 0 by not wrapping in a function literal.
+
+	c.putChunks(int(pos)-1, c.src[c.lastChunkEnd:int(pos)-c.base-1], []byte("func() (v "))
+	printType()
+	var bs []byte
+	if commaOk {
+		bs = append(bs, []byte(", ok bool")...)
+	}
+	bs = append(bs, []byte(") { ")...)
+	if commaOk {
+		bs = append(bs, []byte("v, ok = ")...)
+	} else {
+		bs = append(bs, []byte("v = ")...)
+	}
+	c.dstChunks = append(c.dstChunks, bs)
+	printX()
+	c.dstChunks = append(c.dstChunks, []byte(".("))
+	printType()
+	bs = []byte(`);`)
+	if commaOk {
+		bs = append(bs, []byte(" if !ok { return };")...)
+	}
+	bs = append(bs, []byte(" if false")...)
+
+	var exprs []string
+	for _, check := range checks {
+		bs = append(bs, []byte(` || `)...)
+		expr := "v"
+		for _, st := range check {
+			switch typ := st.Type.(type) {
+			case *types.Pointer:
+				expr = "*(" + expr + ")"
+			case *types.Struct:
+				expr = "(" + expr + ")." + typ.Field(st.Field).Name()
+			}
+		}
+		exprs = append(exprs, expr)
+		bs = append(bs, []byte(expr+` == nil`)...)
+	}
+
+	bs = append(bs, []byte(` { `)...)
+	if commaOk {
+		bs = append(bs, []byte(`ok = false `)...)
+	} else {
+		bs = append(bs, []byte(`var expr string; switch {`)...)
+		for _, expr := range exprs {
+			bs = append(bs, []byte(` case `+expr+` == nil: expr = `+fmt.Sprintf("%q", expr)+`;`)...)
+		}
+		bs = append(bs, []byte(`}; panic("interface conversion: nil value "+expr+" when type-asserting to non-optional")`)...)
+	}
+	bs = append(bs, []byte(`}; return }()`)...)
+	c.dstChunks = append(c.dstChunks, bs)
+	c.moveSrc(end - 1)
+}
+
+func (c *converter) justPrint(pos token.Pos, f func()) {
+	oldEnd := c.lastChunkEnd
+	f()
+	c.putChunks(0, c.src[c.lastChunkEnd:int(pos)-c.base-1], nil)
+	c.lastChunkEnd = oldEnd
+}
+
+func (c *converter) moveSrc(pos token.Pos) {
+	c.putChunks(int(pos), nil, nil)
 }
 
 func (c *converter) convertMapType(v *ast.MapType) {

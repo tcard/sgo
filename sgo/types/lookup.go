@@ -6,6 +6,11 @@
 
 package types
 
+import (
+	"fmt"
+	"strings"
+)
+
 // LookupFieldOrMethod looks up a field or method with given package and name
 // in T and returns the corresponding *Var or *Func, an index sequence, and a
 // bool indicating if there were any pointer indirections on the path to the
@@ -301,8 +306,8 @@ func MissingMethod(V Type, T *Interface, static bool) (method *Func, wrongType b
 // assertableTo reports whether a value of type V can be asserted to have type T.
 // It returns (nil, false) as affirmative answer. Otherwise it returns a missing
 // method required by V and whether it is missing or just has the wrong type.
-func assertableTo(V *Interface, T Type) (method *Func, wrongType bool, needsOptional []Type) {
-	needsOptional = mustOptional(T)
+func assertableTo(V *Interface, T Type) (method *Func, wrongType bool, needsOptional []OptionablePath) {
+	_, needsOptional = FindOptionables(T)
 	if len(needsOptional) > 0 {
 		return
 	}
@@ -316,43 +321,141 @@ func assertableTo(V *Interface, T Type) (method *Func, wrongType bool, needsOpti
 	return
 }
 
-// mustOptional reports whether a type T recursively needs to be wrapped in an optional.
-// If T is Array or Slice, the underlying type will be checked. If T is Optional, it will not
-// need to be wrapped in an optional unless the underlying type is a Map. In that case, further
-// checks are needed for the key and value type of the map.
-func mustOptional(T Type) []Type {
-	var needOptional []Type
-	switch T.(type) {
-	case *Pointer, *Map, *Signature, *Chan:
-		needOptional = append(needOptional, T)
-	case *Slice, *Array:
-		var underlying Type
-		switch T.(type) {
-		case *Slice:
-			underlying = T.(*Slice).Elem()
-		case *Array:
-			underlying = T.(*Array).Elem()
-		}
+// A OptionablePath is a series of steps to reach an optionable type within
+// a composite type.
+type OptionablePath []OptionablePathStep
 
-		needOptional = append(needOptional, mustOptional(underlying)...)
+func (p OptionablePath) String() string {
+	var s []string
+	for _, st := range p {
+		s = append(s, st.String())
+	}
+	return strings.Join(s, "'s ")
+}
+
+// A OptionablePathStep is a step in a path to an optionable type within a
+// composite type.
+type OptionablePathStep struct {
+	// The Type on which to perform the step. If it's a pointer, slice, array,
+	// or channel, the step is taking its element type. If it's a map, and Key
+	// is false, the step is taking its value type, and its key type otherwise.
+	// For struct, interface and function types, see Field and Param.
+	Type Type
+	// Whether the step operation is selecting the key of a map type.
+	Key bool
+	// Field index from a Struct, or, if Type is an Interface, method index
+	// whose Param's type is to be taken.
+	Field int
+	// For interface methods and functions, the parameter whose type to be
+	// taken. If lesser than zero, it refers to the signature's abs(Param)-1
+	// return type.
+	Param int
+}
+
+func (st OptionablePathStep) String() string {
+	switch typ := st.Type.(type) {
+	case *Pointer:
+		return "pointee"
+	case *Map:
+		if st.Key {
+			return "key"
+		} else {
+			return "value"
+		}
 	case *Struct:
-		fields := T.(*Struct).fields
-		for _, f := range fields {
-			needOptional = append(needOptional, mustOptional(f.typ)...)
+		return "field " + typ.Field(st.Field).Name()
+	case *Interface:
+		argOrRet := "argument"
+		i := st.Param + 1
+		if st.Param < 0 {
+			argOrRet = "return type"
+			i = -st.Param
+		}
+		return fmt.Sprintf("method %s's #%d %s", typ.Method(st.Field).Name(), i, argOrRet)
+	case *Signature:
+		argOrRet := "argument"
+		i := st.Param + 1
+		if st.Param < 0 {
+			argOrRet = "return type"
+			i = -st.Param
+		}
+		return fmt.Sprintf("#%d %s", i, argOrRet)
+	default:
+		return "element"
+	}
+}
+
+// FindOptionables returns the optionable types within T, including T itself,
+// categorized by whether they can be checked at runtime to be non-optional
+// (T itself, *T, and fields of T if T is a struct, transitively) or not
+// (channel, slice and array element types, map keys and value types, function
+// and interface method argument and return types).
+func FindOptionables(T Type) (checkable, uncheckable []OptionablePath) {
+	findOptionables2(T, nil, false, false, &checkable, &uncheckable)
+	return
+}
+
+func findOptionables2(T Type, path []OptionablePathStep, allUncheckable bool, wrapped bool, checkable, uncheckable *[]OptionablePath) {
+	if allUncheckable {
+		checkable = uncheckable
+	}
+	switch T := T.(type) {
+	case *Pointer:
+		if !wrapped {
+			*checkable = append(*checkable, path)
+		}
+		findOptionables2(T.Elem(), append(path, OptionablePathStep{Type: T}), allUncheckable, false, checkable, uncheckable)
+	case *Map:
+		if !wrapped {
+			*checkable = append(*checkable, path)
+		}
+		findOptionables2(T.Key(), append(path, OptionablePathStep{Key: true, Type: T}), true, false, checkable, uncheckable)
+		findOptionables2(T.Elem(), append(path, OptionablePathStep{Type: T}), true, false, checkable, uncheckable)
+	case *Signature:
+		if !wrapped {
+			*checkable = append(*checkable, path)
+		}
+		for i := 0; i < T.Params().Len(); i++ {
+			findOptionables2(T.Params().At(i).Type(), append(path, OptionablePathStep{Param: i, Type: T}), true, false, checkable, uncheckable)
+		}
+		for i := 0; i < T.Results().Len(); i++ {
+			findOptionables2(T.Results().At(i).Type(), append(path, OptionablePathStep{Param: -1 - i, Type: T}), true, false, checkable, uncheckable)
+		}
+	case *Interface:
+		if !wrapped {
+			*checkable = append(*checkable, path)
+		}
+		for mi := 0; mi < T.NumMethods(); mi++ {
+			f := T.Method(mi).Type().(*Signature)
+			for i := 0; i < f.Params().Len(); i++ {
+				findOptionables2(f.Params().At(i).Type(), append(path, OptionablePathStep{Field: mi, Param: i, Type: T}), true, false, checkable, uncheckable)
+			}
+			for i := 0; i < f.Results().Len(); i++ {
+				findOptionables2(f.Results().At(i).Type(), append(path, OptionablePathStep{Field: mi, Param: -1 - i, Type: T}), true, false, checkable, uncheckable)
+			}
+		}
+	case *Slice:
+		findOptionables2(T.Elem(), append(path, OptionablePathStep{Type: T}), true, false, checkable, uncheckable)
+	case *Array:
+		findOptionables2(T.Elem(), append(path, OptionablePathStep{Type: T}), true, false, checkable, uncheckable)
+	case *Chan:
+		if !wrapped {
+			*checkable = append(*checkable, path)
+		}
+		findOptionables2(T.Elem(), append(path, OptionablePathStep{Type: T}), true, false, checkable, uncheckable)
+	case *Struct:
+		for i, f := range T.fields {
+			findOptionables2(f.Type(), append(path, OptionablePathStep{Field: i, Type: T}), allUncheckable, false, checkable, uncheckable)
+		}
+	case *Named:
+		if !wrapped && IsOptionable(T.Underlying()) {
+			*checkable = append(*checkable, path)
 		}
 	case *Optional:
-		switch underlying := T.(*Optional).Elem().(type) {
-		case *Map:
-			needOptional = append(needOptional, mustOptional(underlying.Key())...)
-			needOptional = append(needOptional, mustOptional(underlying.Elem())...)
-		case *Chan:
-			needOptional = append(needOptional, mustOptional(underlying.Elem())...)
-		case *Pointer:
-			needOptional = append(needOptional, mustOptional(underlying.Elem())...)
-		}
+		findOptionables2(T.Elem(), path, allUncheckable, true, checkable, uncheckable)
 	}
 
-	return needOptional
+	return
 }
 
 // deref dereferences typ if it is a *Pointer and returns its base and true.

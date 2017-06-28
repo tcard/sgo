@@ -1503,8 +1503,11 @@ Error:
 // typeAssertion checks that x.(T) is legal; xtyp must be the type of x.
 func (check *Checker) typeAssertion(pos token.Pos, x *operand, xtyp *Interface, T Type) {
 	method, wrongType, mustOptional := assertableTo(xtyp, T)
-	for _, o := range mustOptional {
-		check.errorf(pos, "%s cannot be type-asserted to %s (%s must be wrapped in optional)", x, T, o)
+	if len(mustOptional) > 0 {
+		check.errorf(pos, "%s cannot be type-asserted to %s:", x, T)
+		for _, path := range mustOptional {
+			check.errorf(pos, "its %s must be wrapped in an optional", path)
+		}
 	}
 
 	if method == nil {
@@ -1553,7 +1556,7 @@ func (check *Checker) multiExpr(x *operand, e ast.Expr) {
 		msg = "%s must be called"
 	case typexpr:
 		msg = "%s is not an expression"
-	case mapindex, commaok:
+	case mapindex:
 		if !IsOptionable(x.typ) || x.lhs {
 			return
 		}

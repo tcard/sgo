@@ -293,6 +293,9 @@ L:
 		if T == Typ[Invalid] {
 			continue L
 		}
+		if o, ok := T.(*Optional); ok {
+			T = o.elem
+		}
 		// look for duplicate types
 		// (quadratic algorithm, but type switches tend to be reasonably small)
 		for t, pos := range seen {
