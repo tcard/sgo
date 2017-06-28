@@ -334,7 +334,7 @@ if ok {
 }
 ```
 
-In fact, when the first return type from such operations (receiving from a channel, type-asserting, reading from a map) is a pointer, map, interface, channel, or function, SGo will forbid you to perform it without expecting a second "OK" value. This is because those types [don't have a zero value in SGo](#zero-values-of-pointers-maps-functions-channels-and-interfaces), so you need to make sure the operation succeeds.
+In fact, when the first return type from such operations (receiving from a channel, reading from a map) is a pointer, map, interface, channel, or function, SGo will forbid you to perform it without expecting a second "OK" value. This is because those types [don't have a zero value in SGo](#zero-values-of-pointers-maps-functions-channels-and-interfaces), so you need to make sure the operation succeeds.
 
 ## Representation in Go code
 
@@ -360,42 +360,32 @@ What happens instead is that an uninitialized variable remains uninitialized, an
 
 SGo compiles to Go, and all information about optional types gets lost in translation.
 
-Because of this, SGo forbids type-asserting directly to pointers, functions, maps, channels, or interfaces.
+Because of this, type-assertions to pointers, functions, maps, channels, or interfaces need extra runtime checks. Those are automatically added by SGo for you, to ensure type safety.
 
-[Try in browser!](http://fanyare.tcardenas.me:5600/?gist=495cd471e1a2dd6688fc)
+[Try in browser!](http://fanyare.tcardenas.me:5600/?gist=a35f798ab95b1e120fb818b4bb58928c)
 
 ```go
 var m = map[string]int{"foo": 123}
 var x interface{} = m
 
-// The next line wouldn't compile.
-// v := x.(map[string]int)
-
-// Although x was assigned a map[string]int, when you want to take it back, it gets
-// wrapped in an optional.
+// Although x was assigned a map[string]int, when you want to take it back, you can
+// wrap it in an optional.
 v := x.(?map[string]int)
 if v != nil {
 	// v is again map[string]int here.
 	v["bar"] = 456
 }
+
+// Or not, in which case an implicit `if v == nil` check will be added by SGo.
+v = x.(map[string]int) // OK!
+x = (?map[string]int)(nil)
+// v = x.(map[string]int)       // Panics!
+v \ ok := x.(map[string]int) // ok is false!
 ```
 
 This is unfortunate, but necessary due to [the way SGo optionals get translated to Go](#representation-in-go-code). At runtime, SGo programs don't know whether pointers, functions, maps, channels, or interfaces were wrapped in an optional or not when they were defined in the code. To a running SGo program, which is just a running _Go_ program, a value of an optional type, `?T`, has the wrapped type instead, `T`; plus, it can be `nil`. Type assertions use this runtime information, and thus an optional value could be type-asserted to a its wrapped type if SGo didn't forbid the type assertion altogether.
 
-```go
-var m ?map[string]int = nil
-var x interface{} = m
-
-// The next line wouldn't compile.
-// v := x.(map[string]int)
-//
-// If it did compile, at runtime the type assertion would succeed even though
-// x holds really a ?map[string]int, not a map[string]int. But v would be nil,
-// because m is, and a nil map is an illegal situation in SGo.
-//
-// The next line would then cause a nil dereference panic:
-// v["bar"] = 456
-```
+Type-switches follow the same rules. Additionally, you can't have both `T` and `?T` as clauses in a type-switch.
 
 ## Reflection
 
