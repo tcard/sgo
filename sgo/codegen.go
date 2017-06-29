@@ -1256,7 +1256,9 @@ func (c *converter) typeAssertOptionables(pos, end token.Pos, commaOk bool, chec
 func (c *converter) justPrint(pos token.Pos, f func()) {
 	oldEnd := c.lastChunkEnd
 	f()
-	c.putChunks(0, c.src[c.lastChunkEnd:int(pos)-c.base-1], nil)
+	if to := int(pos) - c.base - 1; to > c.lastChunkEnd {
+		c.putChunks(0, c.src[c.lastChunkEnd:to], nil)
+	}
 	c.lastChunkEnd = oldEnd
 }
 

@@ -293,13 +293,10 @@ L:
 		if T == Typ[Invalid] {
 			continue L
 		}
-		if o, ok := T.(*Optional); ok {
-			T = o.elem
-		}
 		// look for duplicate types
 		// (quadratic algorithm, but type switches tend to be reasonably small)
 		for t, pos := range seen {
-			if T == nil && t == nil || T != nil && t != nil && Identical(T, t) {
+			if T == nil && t == nil || T != nil && t != nil && Identical(unwrapped(T), unwrapped(t)) {
 				// talk about "case" rather than "type" because of nil case
 				Ts := "nil"
 				if T != nil {
@@ -316,6 +313,13 @@ L:
 		}
 	}
 	return
+}
+
+func unwrapped(t Type) Type {
+	if o, ok := t.(*Optional); ok {
+		return o.elem
+	}
+	return t
 }
 
 // stmt typechecks statement s.
