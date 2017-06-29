@@ -734,7 +734,15 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 		if x.mode == invalid {
 			return
 		}
-		xtyp, _ := x.typ.Underlying().(*Interface)
+		var xtyp *Interface
+		switch t := x.typ.Underlying().(type) {
+		case *Interface:
+			xtyp = t
+		case *Optional:
+			if IsInterface(t.Elem()) {
+				xtyp = t.Elem().Underlying().(*Interface)
+			}
+		}
 		if xtyp == nil {
 			check.errorf(x.pos(), "%s is not an interface", &x)
 			return
