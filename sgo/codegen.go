@@ -928,7 +928,7 @@ func (c *converter) convertTypeSwitchStmt(v *ast.TypeSwitchStmt) {
 					if i > 0 {
 						bs = append(bs, []byte(" || ")...)
 					}
-					bs = append(bs, []byte("func() bool { _, ok := ")...)
+					bs = append(bs, []byte("func() bool { _, __sgo_ok := ")...)
 					c.dstChunks = append(c.dstChunks, bs)
 					bs = nil
 					c.moveSrc(v.Pos() - 1)
@@ -941,11 +941,11 @@ func (c *converter) convertTypeSwitchStmt(v *ast.TypeSwitchStmt) {
 					}, func() {
 						c.dstChunks = append(c.dstChunks, []byte("__sgo_switched"))
 					})
-					bs = append(bs, []byte("; return ok }()")...)
+					bs = append(bs, []byte("; return __sgo_ok }()")...)
 				}
 			}
 		} else {
-			bs = append(bs, []byte(", ok := ")...)
+			bs = append(bs, []byte(", __sgo_ok := ")...)
 			c.dstChunks = append(c.dstChunks, bs)
 			bs = nil
 			c.moveSrc(v.Pos() - 1)
@@ -959,7 +959,7 @@ func (c *converter) convertTypeSwitchStmt(v *ast.TypeSwitchStmt) {
 			}, func() {
 				c.dstChunks = append(c.dstChunks, []byte("__sgo_switched"))
 			})
-			bs = append(bs, []byte("; ok ")...)
+			bs = append(bs, []byte("; __sgo_ok ")...)
 		}
 		bs = append(bs, []byte("{\n")...)
 		c.dstChunks = append(c.dstChunks, bs)
@@ -1200,17 +1200,17 @@ func (c *converter) convertTypeAssertExpr(v *ast.TypeAssertExpr, commaOk bool) {
 func (c *converter) typeAssertOptionables(pos, end token.Pos, commaOk bool, checks []types.OptionablePath, printType, printX func()) {
 	// TODO: Optimize len(checks) == 0 by not wrapping in a function literal.
 
-	c.putChunks(int(pos)-1, c.src[c.lastChunkEnd:int(pos)-c.base-1], []byte("func() (v "))
+	c.putChunks(int(pos)-1, c.src[c.lastChunkEnd:int(pos)-c.base-1], []byte("func() (__sgo_v "))
 	printType()
 	var bs []byte
 	if commaOk {
-		bs = append(bs, []byte(", ok bool")...)
+		bs = append(bs, []byte(", __sgo_ok bool")...)
 	}
 	bs = append(bs, []byte(") { ")...)
 	if commaOk {
-		bs = append(bs, []byte("v, ok = ")...)
+		bs = append(bs, []byte("__sgo_v, __sgo_ok = ")...)
 	} else {
-		bs = append(bs, []byte("v = ")...)
+		bs = append(bs, []byte("__sgo_v = ")...)
 	}
 	c.dstChunks = append(c.dstChunks, bs)
 	printX()
@@ -1218,14 +1218,14 @@ func (c *converter) typeAssertOptionables(pos, end token.Pos, commaOk bool, chec
 	printType()
 	bs = []byte(`);`)
 	if commaOk {
-		bs = append(bs, []byte(" if !ok { return };")...)
+		bs = append(bs, []byte(" if !__sgo_ok { return };")...)
 	}
 	bs = append(bs, []byte(" if false")...)
 
 	var exprs []string
 	for _, check := range checks {
 		bs = append(bs, []byte(` || `)...)
-		expr := "v"
+		expr := "__sgo_v"
 		for _, st := range check {
 			switch typ := st.Type.(type) {
 			case *types.Pointer:
@@ -1240,7 +1240,7 @@ func (c *converter) typeAssertOptionables(pos, end token.Pos, commaOk bool, chec
 
 	bs = append(bs, []byte(` { `)...)
 	if commaOk {
-		bs = append(bs, []byte(`ok = false `)...)
+		bs = append(bs, []byte(`__sgo_ok = false `)...)
 	} else {
 		bs = append(bs, []byte(`var expr string; switch {`)...)
 		for _, expr := range exprs {
