@@ -962,6 +962,14 @@ func (c *converter) convertTypeSwitchStmt(v *ast.TypeSwitchStmt) {
 			bs = append(bs, []byte("; __sgo_ok ")...)
 		}
 		bs = append(bs, []byte("{\n")...)
+		if assignVar != "_" {
+			// Force use of assignVar in each clause. In the original, the
+			// variable is used if used in any of the clauses uses it, since
+			// it's declared in the switch's prologue; we are compiling each
+			// clause to an if, each which defining the variable, so _all_
+			// clauses must use the variable.
+			bs = append(bs, []byte("_ = "+assignVar+"\n")...)
+		}
 		c.dstChunks = append(c.dstChunks, bs)
 		bs = nil
 		c.moveSrc(clause.Colon)
