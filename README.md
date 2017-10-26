@@ -1,4 +1,4 @@
-# SGo: a safer Go dialect [![Build Status](https://secure.travis-ci.org/tcard/sgo.svg?branch=master)](http://travis-ci.org/tcard/sgo) [![Gitter](https://badges.gitter.im/tcard/sgo.svg)](https://gitter.im/tcard/sgo?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+# SGo: a safer Go dialect [![Build Status](https://secure.travis-ci.org/tcard/sgo.svg?branch=master)](http://travis-ci.org/tcard/sgo) [![Gitter](https://badges.gitter.im/tcard/sgo.svg)](https://gitter.im/tcard/sgo?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) [![GoDoc](https://godoc.org/github.com/tcard/sgo?status.svg)](https://godoc.org/github.com/tcard/sgo) [![Go Report Card](https://goreportcard.com/badge/github.com/tcard/sgo)](https://goreportcard.com/report/github.com/tcard/sgo) [![codecov](https://codecov.io/gh/tcard/sgo/branch/master/graph/badge.svg?token=)](https://codecov.io/gh/tcard/sgo)
 
 **Disclaimer: alpha stage!**
 

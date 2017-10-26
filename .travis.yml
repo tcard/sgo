@@ -3,7 +3,13 @@ language: go
 go:
   - 1.8
 
+before_install:
+  - go get -t -v ./...
+
 install:
   - go install
 
-script: go test ./sgo/...
+script: go test -coverprofile=coverage.txt -covermode=atomic ./sgo/...
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
