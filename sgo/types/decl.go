@@ -180,11 +180,11 @@ func (check *Checker) varDecl(obj *Var, lhs []*Var, entangledLhs *Var, typ, init
 			obj.usable = false
 		}
 		return
-	} else {
-		obj.usable = true
-		if debugUsable {
-			fmt.Println("USABLE varDecl:", obj.name, fmt.Sprintf("%p", obj), obj.usable)
-		}
+	}
+
+	obj.usable = true
+	if debugUsable {
+		fmt.Println("USABLE varDecl:", obj.name, fmt.Sprintf("%p", obj), obj.usable)
 	}
 
 	shouldCheckRhs := !check.conf.IgnoreTopLevelVarValues || check.scope.parent.parent != Universe

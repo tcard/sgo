@@ -50,7 +50,7 @@ type ExprList struct {
 	EntangledPos int    // before which item in list there is a '\'
 }
 
-// Len returns the lenght of the list of expressions.
+// Len returns the length of the list of expressions.
 func (l *ExprList) Len() int {
 	if l == nil {
 		return 0
@@ -82,7 +82,7 @@ type IdentList struct {
 	EntangledPos int      // before which item in list there is a '\'
 }
 
-// Len returns the lenght of the list of expressions.
+// Len returns the length of the list of expressions.
 func (l *IdentList) Len() int {
 	if l == nil {
 		return 0

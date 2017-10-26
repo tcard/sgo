@@ -21,6 +21,9 @@ import (
 	"github.com/tcard/sgo/sgo/types"
 )
 
+// TranslatePaths translates SGo code from the given import paths. It returns
+// the paths to the created Go files.
+//
 // For SGo: func(paths []string) (created []string, warnings []error, errs []error)
 func TranslatePaths(paths []string) (created []string, warnings []error, errs []error) {
 	cwd, err := os.Getwd()
@@ -43,6 +46,9 @@ func TranslatePaths(paths []string) (created []string, warnings []error, errs []
 	return created, warnings, errs
 }
 
+// TranslateDir translates SGo code from the given directory name. It returns
+// the paths to the created Go files.
+//
 // For SGo: func(dirName string) ([]string, []error)
 func TranslateDir(dirName string) ([]string, []error) {
 	var errs []error
@@ -71,11 +77,18 @@ func TranslateDir(dirName string) ([]string, []error) {
 	return TranslateFilePathsFrom(dirName, paths...)
 }
 
+// TranslateFilePaths translates SGo code from the given files. It returns
+// the paths to the created Go files.
+//
 // For SGo: func(paths ...string) ([]string, []error)
 func TranslateFilePaths(paths ...string) ([]string, []error) {
 	return TranslateFilePathsFrom("", paths...)
 }
 
+// TranslateFilePaths translates SGo code from the given files. The optional
+// argument whence is the path to the directory the files are on. It returns
+// the paths to the created Go files.
+//
 // For SGo: func(whence string, paths ...string) ([]string, []error)
 func TranslateFilePathsFrom(whence string, paths ...string) ([]string, []error) {
 	var named []NamedFile
@@ -115,17 +128,25 @@ func TranslateFilePathsFrom(whence string, paths ...string) ([]string, []error) 
 	return created, errs
 }
 
+// A NamedFile is a io.Reader for a file with its path.
 type NamedFile struct {
 	Path string
 	// For SGo: io.Reader
 	File io.Reader
 }
 
+// TranslateFiles translates SGo code from the given files. It returns
+// the contents of the generated Go files.
+//
 // For SGo: func(files ...NamedFile) ([][]byte, []error)
 func TranslateFiles(files ...NamedFile) ([][]byte, []error) {
 	return TranslateFilesFrom("", files...)
 }
 
+// TranslateFileFrom translates SGo code from the given files. The optional
+// argument whence is the path to the directory the files are on. It returns
+// the contents of the generated Go files.
+//
 // For SGo: func(whence string, files ...NamedFile) ([][]byte, []error)
 func TranslateFilesFrom(whence string, files ...NamedFile) ([][]byte, []error) {
 	var errs []error
@@ -170,6 +191,9 @@ func TranslateFilesFrom(whence string, files ...NamedFile) ([][]byte, []error) {
 	return translate(info, srcs, parsed, fset), errs
 }
 
+// TranslateFile translates SGo code from the given io.Reader to the io.Writer
+// returned by the first argument.
+//
 // For SGo: func(w func() (io.Writer \ error), r io.Reader, filename string) []error
 func TranslateFile(w func() (io.Writer, error), r io.Reader, filename string) []error {
 	gen, errs := TranslateFiles(NamedFile{filename, r})

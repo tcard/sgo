@@ -359,9 +359,8 @@ func (st OptionablePathStep) String() string {
 	case *Map:
 		if st.Key {
 			return "key"
-		} else {
-			return "value"
 		}
+		return "value"
 	case *Struct:
 		return "field " + typ.Field(st.Field).Name()
 	case *Interface:

@@ -205,7 +205,7 @@ func testTokenizerErr(t *testing.T, i int, c parseTestCase, err error) {
 			t.Errorf("case %d: unexpected error: %v", i, err)
 		}
 	} else if c.checkErr != nil {
-		t.Errorf("case %d: expected error, got nil")
+		t.Errorf("case %d: expected error, got nil", i)
 	}
 }
 

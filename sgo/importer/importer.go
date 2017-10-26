@@ -36,6 +36,8 @@ func Default(files []*ast.File) types.Importer {
 	return imp
 }
 
+// DefaultFrom is like Default, with an optional whence argument for the path
+// to the directory from which the importing is done.
 func DefaultFrom(files []*ast.File, whence string) (types.Importer, error) {
 	visiblePaths := map[string]struct{}{}
 	for _, file := range files {

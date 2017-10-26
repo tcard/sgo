@@ -1,3 +1,4 @@
+// Packa
 package annotations
 
 import (
@@ -9,18 +10,22 @@ import (
 	"unicode/utf8"
 )
 
+// Parse parses source in .sgoann format and returns an Annotation you can
+// navigate as you walk through a Go AST for a package.
+//
+// The source must conform to this grammar:
+//
+// 	List -> Item*
+// 	Item -> Name Def /[\n;]*/
+// 	Name -> Ident | Receiver
+// 	Receiver -> "(" "*" Ident ")"
+// 	Ident -> (Go identifier)
+// 	Def -> Type | "{" List "}"
+// 	Type -> /[^{][^\n;]*/
 func Parse(src string) (*Annotation, error) {
 	anns, err := parseList(NewTokenizer(src))
 	return NewAnnotation(anns), err
 }
-
-// List -> Item*
-// Item -> Name Def /[\n;]*/
-// Name -> Ident | Receiver
-// Receiver -> "(" "*" Ident ")"
-// Ident -> (Go identifier)
-// Def -> Type | "{" List "}"
-// Type -> /[^{][^\n;]*/
 
 func parseList(src *Tokenizer) (map[string]string, error) {
 	anns := map[string]string{}
@@ -46,8 +51,6 @@ func parseList(src *Tokenizer) (map[string]string, error) {
 			anns[k] = v
 		}
 	}
-
-	return anns, nil
 }
 
 func parseItem(src *Tokenizer) (map[string]string, error) {
@@ -209,6 +212,7 @@ func expect(r rune, src *Tokenizer) error {
 	return nil
 }
 
+// A Tokenizer produces Tokens from a .sgoann source.
 type Tokenizer struct {
 	src         string
 	bytePos     int
@@ -218,10 +222,12 @@ type Tokenizer struct {
 	lookahead   Token
 }
 
+// NewTokenizer returns a Tokenizer for the given .sgoann source.
 func NewTokenizer(src string) *Tokenizer {
 	return &Tokenizer{src: src, line: 1}
 }
 
+// SkipWhite skips until the next non-whitespace character.
 func (t *Tokenizer) SkipWhite() {
 	for {
 		tk, err := t.Peek()
@@ -232,6 +238,7 @@ func (t *Tokenizer) SkipWhite() {
 	}
 }
 
+// SkipWhite until the next new line or non-whitespace character.
 func (t *Tokenizer) SkipWhiteUntilLine() {
 	for {
 		tk, err := t.Peek()
@@ -246,6 +253,7 @@ func (t *Tokenizer) empty() bool {
 	return t.bytePos >= len(t.src)
 }
 
+// Peek returns the next Token without consuming it.
 func (t *Tokenizer) Peek() (Token, error) {
 	if t.lookahead.Size > 0 {
 		return t.lookahead, nil
@@ -273,6 +281,7 @@ func (t *Tokenizer) col() int {
 	return t.runePos - t.lastLinePos + 1
 }
 
+// Next consumes and returns the next Token.
 func (t *Tokenizer) Next() (Token, error) {
 	tk, err := t.Peek()
 	if err != nil {
@@ -292,6 +301,7 @@ func (t *Tokenizer) Next() (Token, error) {
 	return tk, nil
 }
 
+// A Token is a .sgoann token from a source.
 type Token struct {
 	Lexeme  rune
 	Line    int
@@ -301,29 +311,37 @@ type Token struct {
 	RunePos int
 }
 
+// UTF8Error is a UTF-8 encoding error at the given position.
 type UTF8Error struct {
 	Line int
 	Col  int
 }
 
+// NewUTF8Error returns a UTF8Error.
 func NewUTF8Error(line, col int) UTF8Error {
 	return UTF8Error{line, col}
 }
 
+// Error implements the error interface.
 func (err UTF8Error) Error() string {
 	return fmt.Sprintf("invalid UTF-8 character starting at %d:%d", err.Line, err.Col)
 }
 
+// UnexpectedTokenError reports an unexpected token while parsing a .sgoann
+// source.
 type UnexpectedTokenError struct {
 	Token Token
 }
 
+// NewUnexpectedTokenError returns an UnexpectedTokenError.
 func NewUnexpectedTokenError(tk Token) UnexpectedTokenError {
 	return UnexpectedTokenError{tk}
 }
 
+// Error implements the error interface.
 func (err UnexpectedTokenError) Error() string {
 	return fmt.Sprintf("unexpected token at %d:%d: '%v'", err.Token.Line, err.Token.Col, string(err.Token.Lexeme))
 }
 
+// EOF represents an unexpected end of file while parsing a .sgoann source.
 var EOF error = errors.New("unexpected end of file")
