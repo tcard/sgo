@@ -9,7 +9,9 @@ before_install:
 install:
   - go install
 
-script: go test -coverprofile=coverage.txt -covermode=atomic ./sgo/...
+script:
+  - for pkg in $(go list ./...); do go test -coverprofile=coverage-$(echo -n $pkg | tr / _).txt -covermode=atomic $pkg; done
+  - cat coverage-*.txt > coverage.txt
 
 after_success:
   - bash <(curl -s https://codecov.io/bash)
