@@ -123,4 +123,4 @@ type (
 	D1 interface{ C1 }
 )
 
-var _ A1 = C1 /* ERROR cannot use C1 */ (nil)
+var _ A1 = C1 /* ERROR cannot */ (nil)

@@ -1387,49 +1387,47 @@ func f(x T) T { return foo.F(x) }
 	files := []*ast.File{f}
 
 	// type-check using all possible importers
-	for _, compiler := range []string{"gc", "gccgo", "source"} {
-		errcount := 0
-		conf := Config{
-			Error: func(err error) {
-				// we should only see the import error
-				if errcount > 0 || !strings.Contains(err.Error(), "could not import") {
-					t.Errorf("for %s importer, got unexpected error: %v", compiler, err)
+	errcount := 0
+	conf := Config{
+		Error: func(err error) {
+			// we should only see the import error
+			if errcount > 0 || !strings.Contains(err.Error(), "could not import") {
+				t.Errorf("got unexpected error: %v", err)
+			}
+			errcount++
+		},
+		Importer: importer.Default(files),
+	}
+
+	info := &Info{
+		Uses: make(map[*ast.Ident]Object),
+	}
+	pkg, _ := conf.Check("p", fset, files, info)
+	if pkg == nil {
+		t.Errorf("type-checking failed to return a package")
+		return
+	}
+
+	imports := pkg.Imports()
+	if len(imports) != 1 {
+		t.Errorf("got %d imports, want 1", len(imports))
+		return
+	}
+	imp := imports[0]
+	if imp.Name() != "foo" {
+		t.Errorf(`got %q, want "foo"`, imp.Name())
+		return
+	}
+
+	// verify that all uses of foo refer to the imported package foo (imp)
+	for ident, obj := range info.Uses {
+		if ident.Name == "foo" {
+			if obj, ok := obj.(*PkgName); ok {
+				if obj.Imported() != imp {
+					t.Errorf("%s resolved to %v; want %v", ident, obj.Imported(), imp)
 				}
-				errcount++
-			},
-			Importer: importer.For(compiler, nil),
-		}
-
-		info := &Info{
-			Uses: make(map[*ast.Ident]Object),
-		}
-		pkg, _ := conf.Check("p", fset, files, info)
-		if pkg == nil {
-			t.Errorf("for %s importer, type-checking failed to return a package", compiler)
-			continue
-		}
-
-		imports := pkg.Imports()
-		if len(imports) != 1 {
-			t.Errorf("for %s importer, got %d imports, want 1", compiler, len(imports))
-			continue
-		}
-		imp := imports[0]
-		if imp.Name() != "foo" {
-			t.Errorf(`for %s importer, got %q, want "foo"`, compiler, imp.Name())
-			continue
-		}
-
-		// verify that all uses of foo refer to the imported package foo (imp)
-		for ident, obj := range info.Uses {
-			if ident.Name == "foo" {
-				if obj, ok := obj.(*PkgName); ok {
-					if obj.Imported() != imp {
-						t.Errorf("%s resolved to %v; want %v", ident, obj.Imported(), imp)
-					}
-				} else {
-					t.Errorf("%s resolved to %v; want package name", ident, obj)
-				}
+			} else {
+				t.Errorf("%s resolved to %v; want package name", ident, obj)
 			}
 		}
 	}
