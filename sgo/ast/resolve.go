@@ -117,7 +117,7 @@ func NewPackage(fset *token.FileSet, files map[string]*File, importer Importer, 
 			path, _ := strconv.Unquote(spec.Path.Value)
 			pkg, err := importer(imports, path)
 			if err != nil {
-				p.errorf(spec.Path.Pos(), "could not import %s (%s)", path, err)
+				p.errorf(spec.Path.Pos(), "could not import %q (%s)", path, err)
 				importErrors = true
 				continue
 			}

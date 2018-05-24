@@ -240,6 +240,7 @@ func (c *converter) convertPackage(v *gotypes.Package) *types.Package {
 		iface.Complete()
 	}
 
+	ret.MarkComplete()
 	return ret
 }
 

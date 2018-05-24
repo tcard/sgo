@@ -14,9 +14,19 @@ import (
 func ExampleParseFile() {
 	fset := token.NewFileSet() // positions are relative to fset
 
-	// Parse the file containing this very example
-	// but stop after processing the imports.
-	f, err := parser.ParseFile(fset, "example_test.go", nil, parser.ImportsOnly)
+	src := `package foo
+
+import (
+	"fmt"
+	"time"
+)
+
+func bar() {
+	fmt.Println(time.Now())
+}`
+
+	// Parse src but stop after processing the imports.
+	f, err := parser.ParseFile(fset, "", src, parser.ImportsOnly)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -30,6 +40,5 @@ func ExampleParseFile() {
 	// output:
 	//
 	// "fmt"
-	// "github.com/tcard/sgo/sgo/parser"
-	// "github.com/tcard/sgo/sgo/token"
+	// "time"
 }

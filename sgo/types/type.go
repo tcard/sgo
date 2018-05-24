@@ -217,6 +217,7 @@ func (t *Tuple) Entangled() *Var {
 func (t *Tuple) At(i int) *Var { return t.vars[i] }
 
 // A Signature represents a (non-builtin) function or method type.
+// The receiver is ignored when comparing signatures for identity.
 type Signature struct {
 	// We need to keep the scope in Signature (rather than passing it around
 	// and store it in the Func Object) because when type-checking a function
@@ -247,7 +248,7 @@ func NewSignature(recv *Var, params, results *Tuple, variadic bool) *Signature {
 }
 
 // Recv returns the receiver of signature s (if a method), or nil if a
-// function.
+// function. It is ignored when comparing signatures for identity.
 //
 // For an abstract method, Recv returns the enclosing interface either
 // as a *Named or an *Interface. Due to embedding, an interface may
@@ -272,12 +273,25 @@ type Interface struct {
 	allMethods []*Func // ordered list of methods declared with or embedded in this interface (TODO(gri): replace with mset)
 }
 
-// NewInterface returns a new interface for the given methods and embedded types.
+// emptyInterface represents the empty (completed) interface
+var emptyInterface = Interface{allMethods: markComplete}
+
+// markComplete is used to mark an empty interface as completely
+// set up by setting the allMethods field to a non-nil empty slice.
+var markComplete = make([]*Func, 0)
+
+// NewInterface returns a new (incomplete) interface for the given methods and embedded types.
+// To compute the method set of the interface, Complete must be called.
 func NewInterface(methods []*Func, embeddeds []*Named) *Interface {
 	typ := new(Interface)
 
 	for _, m := range methods {
 		typ.AddMethod(m)
+	}
+	sort.Sort(byUniqueMethodName(methods))
+
+	if embeddeds == nil {
+		sort.Sort(byUniqueTypeName(embeddeds))
 	}
 
 	typ.methods = methods
@@ -292,7 +306,7 @@ func (t *Interface) AddMethod(m *Func) {
 	}
 	// set receiver
 	// TODO(gri) Ideally, we should use a named type here instead of
-	// t, for less verbose printing of interface method signatures.
+	// typ, for less verbose printing of interface method signatures.
 	m.typ.(*Signature).recv = NewVar(m.pos, m.pkg, "", t)
 	t.methods = append(t.methods, m)
 }
@@ -417,6 +431,7 @@ type Named struct {
 }
 
 // NewNamed returns a new named type for the given type name, underlying type, and associated methods.
+// If the given type name obj doesn't have a type yet, its type is set to the returned named type.
 // The underlying type must not be a *Named.
 func NewNamed(obj *TypeName, underlying Type, methods []*Func) *Named {
 	if _, ok := underlying.(*Named); ok {
@@ -427,7 +442,7 @@ func NewNamed(obj *TypeName, underlying Type, methods []*Func) *Named {
 	return typ
 }
 
-// TypeName returns the type name for the named type t.
+// Obj returns the type name for the named type t.
 func (t *Named) Obj() *TypeName { return t.obj }
 func (t *Named) SetObj(obj *TypeName) {
 	if obj != nil && obj.typ == nil {
@@ -443,7 +458,6 @@ func (t *Named) NumMethods() int { return len(t.methods) }
 func (t *Named) Method(i int) *Func { return t.methods[i] }
 
 // SetUnderlying sets the underlying type and marks t as complete.
-// TODO(gri) determine if there's a better solution rather than providing this function
 func (t *Named) SetUnderlying(underlying Type) {
 	if underlying == nil {
 		panic("types.Named.SetUnderlying: underlying type must not be nil")
@@ -455,7 +469,6 @@ func (t *Named) SetUnderlying(underlying Type) {
 }
 
 // AddMethod adds method m unless it is already in the method list.
-// TODO(gri) find a better solution instead of providing this function
 func (t *Named) AddMethod(m *Func) {
 	if i, _ := lookupMethod(t.methods, m.pkg, m.name); i < 0 {
 		t.methods = append(t.methods, m)
